@@ -38,20 +38,28 @@ module.exports = {
       to: { path: '(/adapters/|node_modules/@prisma|apps/api/src/shared/infrastructure)' },
     },
     {
+      // domain/application/adapters를 나열하는 대신 "허용되는 건 index.ts뿐"으로
+      // 뒤집는다 — 스펙 9.1이 못박은 네 번째 디렉터리 modules/*/testing/도
+      // 나열 목록에선 빠지기 쉽지만 이 형태에서는 자동으로 막힌다.
       name: 'no-cross-module-internals',
       comment: '모듈 간 참조는 공개 API(index.ts)로만',
       severity: 'error',
       from: { path: 'apps/api/src/modules/([^/]+)/' },
       // (?!$1/) 의 슬래시가 필수다 — 없으면 `order` 모듈이 `orders` 모듈 내부를
       // import해도 접두사가 일치해 통과한다.
-      to: { path: 'apps/api/src/modules/(?!$1/)[^/]+/(domain|application|adapters)' },
+      to: {
+        path: 'apps/api/src/modules/(?!$1/)[^/]+/',
+        pathNot: 'apps/api/src/modules/[^/]+/index\\.ts$',
+      },
     },
     {
+      // shared/testing 하나만 나열했었다 — 스펙 9.1대로 modules/*/testing/이 생기면
+      // 그쪽 fake는 이 규칙의 사각지대였다. 두 위치를 모두 to에 포함한다.
       name: 'no-test-doubles-in-production',
       comment: '테스트 fake가 운영 코드에 새어 들어가면 안 된다',
       severity: 'error',
-      from: { path: 'apps/api/src', pathNot: '(\\.spec\\.ts$|apps/api/src/shared/testing)' },
-      to: { path: 'apps/api/src/shared/testing' },
+      from: { path: 'apps/api/src', pathNot: '(\\.spec\\.ts$|/testing/)' },
+      to: { path: '(apps/api/src/shared/testing|apps/api/src/modules/[^/]+/testing)' },
     },
 
     // ── 프론트: FSD ──────────────────────────────────────
@@ -81,10 +89,15 @@ module.exports = {
     },
     {
       // $1 = 레이어, $2 = 슬라이스. features뿐 아니라 슬라이스를 갖는 네 레이어를 모두 덮는다.
+      // (ui|model|api) 나열 대신 "허용되는 건 index.ts뿐"으로 뒤집는다 — FSD 세그먼트에는
+      // lib, config, const도 있고, 스펙 §11.2의 원 예시가 그 셋을 빠뜨렸을 뿐 실수가 아니다.
       name: 'fsd-no-cross-slice-internals',
       severity: 'error',
       from: { path: 'apps/web/src/(entities|features|widgets|views)/([^/]+)/' },
-      to: { path: 'apps/web/src/$1/(?!$2/)[^/]+/(ui|model|api)' },
+      to: {
+        path: 'apps/web/src/$1/(?!$2/)[^/]+/',
+        pathNot: 'apps/web/src/[^/]+/[^/]+/index\\.ts$',
+      },
     },
     {
       name: 'no-server-code-in-fsd',
