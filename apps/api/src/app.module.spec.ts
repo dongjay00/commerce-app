@@ -170,3 +170,25 @@ describe('AppModule 부팅 — JWT_SECRET 검증', () => {
     }
   });
 });
+
+describe('AppModule 부팅 — REFRESH_TOKEN_TTL_DAYS 검증', () => {
+  it('REFRESH_TOKEN_TTL_DAYS가 0 이하면 컴파일(부팅)이 실패한다', async () => {
+    // IdentityModule의 REFRESH_TTL 팩토리가 readRefreshTtl(process.env)를 실제로
+    // 호출하는지는 이 테스트만이 증명한다 — refresh-ttl.config.spec.ts는 함수 자체를
+    // 직접 호출해서 검증했을 뿐, 어떤 모듈도 부팅 시점에 그 함수를 부르지 않는 채로
+    // 상수를 반환하도록 바뀌어도 이 회귀는 잡히지 않았을 것이다.
+    const original = process.env['REFRESH_TOKEN_TTL_DAYS'];
+    process.env['REFRESH_TOKEN_TTL_DAYS'] = '0';
+    try {
+      await expect(Test.createTestingModule({ imports: [AppModule] }).compile()).rejects.toThrow(
+        /REFRESH_TOKEN_TTL_DAYS/,
+      );
+    } finally {
+      if (original === undefined) {
+        delete process.env['REFRESH_TOKEN_TTL_DAYS'];
+      } else {
+        process.env['REFRESH_TOKEN_TTL_DAYS'] = original;
+      }
+    }
+  });
+});

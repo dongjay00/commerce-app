@@ -68,7 +68,8 @@ export const addressContract = c.router({
     path: '/addresses/:addressId',
     pathParams: z.object({ addressId: z.string().uuid() }),
     body: c.noBody(),
-    responses: { 204: c.noBody(), 401: errorDtoSchema, 404: errorDtoSchema },
+    // addressId가 uuid가 아니면 AddressId.of가 400을 던진다 — update와 동일하다.
+    responses: { 204: c.noBody(), 400: errorDtoSchema, 401: errorDtoSchema, 404: errorDtoSchema },
     summary: '주소 삭제',
   },
   setDefault: {
@@ -76,7 +77,8 @@ export const addressContract = c.router({
     path: '/addresses/:addressId/default',
     pathParams: z.object({ addressId: z.string().uuid() }),
     body: c.noBody(),
-    responses: { 204: c.noBody(), 401: errorDtoSchema, 404: errorDtoSchema },
+    // addressId가 uuid가 아니면 AddressId.of가 400을 던진다 — update와 동일하다.
+    responses: { 204: c.noBody(), 400: errorDtoSchema, 401: errorDtoSchema, 404: errorDtoSchema },
     summary: '기본 배송지 지정. 이전 기본은 자동으로 해제된다',
   },
 });

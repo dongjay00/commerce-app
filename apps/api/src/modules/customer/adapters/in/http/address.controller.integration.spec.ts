@@ -1,4 +1,4 @@
-import { ErrorCode } from '@commerce/contracts';
+import { addressContract, ErrorCode } from '@commerce/contracts';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -40,6 +40,9 @@ const OFFICE = {
   phone: '010-9876-5432',
   zip: '04524',
   line1: '서울시 중구 세종대로 110',
+  // line2가 있는 유일한 픽스처다 — HOME은 없음(null) 분기만 돈다. 이 필드가 있어야
+  // toDto의 line2 있음 분기(address.controller.ts)가 실행된다.
+  line2: '3층 302호',
 };
 
 async function signUp(email: string): Promise<{ accessToken: string }> {
@@ -58,6 +61,9 @@ describe('주소록', () => {
     const response = await request(app.getHttpServer()).get('/addresses');
     expect(response.status).toBe(401);
     expect(response.body.code).toBe(ErrorCode.UNAUTHENTICATED);
+    // 메시지로 AccessTokenGuard가 실제로 막았는지 확인한다 — 가드가 없으면
+    // @CurrentPrincipal()이 대신 던지는데, 그 메시지는 '인증 정보가 없습니다.'로 다르다.
+    expect(response.body.message).toBe('인증 토큰이 없습니다.');
   });
 
   it('잘못된 토큰이면 401이다', async () => {
@@ -76,9 +82,11 @@ describe('주소록', () => {
       .send(HOME);
     expect(added.status).toBe(201);
     expect(added.body.isDefault).toBe(true);
+    expect(() => addressContract.add.responses[201].parse(added.body)).not.toThrow();
 
     const list = await request(app.getHttpServer()).get('/addresses').set(authed(accessToken));
     expect(list.status).toBe(200);
+    expect(() => addressContract.list.responses[200].parse(list.body)).not.toThrow();
     expect(list.body.addresses).toHaveLength(1);
     expect(list.body.addresses[0].isDefault).toBe(true);
   });
@@ -101,6 +109,9 @@ describe('주소록', () => {
     const list = await request(app.getHttpServer()).get('/addresses').set(authed(accessToken));
     expect(list.body.addresses[0].id).toBe(second.body.id);
     expect(list.body.addresses[0].isDefault).toBe(true);
+    // OFFICE는 line2를 가진 유일한 픽스처다 — 목록 응답까지 그 값이 그대로 살아남는지
+    // 확인한다(toDto의 line2 있음 분기).
+    expect(list.body.addresses[0].line2).toBe(OFFICE.line2);
     expect(list.body.addresses).toHaveLength(2);
   });
 

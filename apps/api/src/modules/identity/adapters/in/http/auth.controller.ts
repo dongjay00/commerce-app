@@ -81,7 +81,8 @@ export class AuthController {
     @Body(new ZodValidationPipe(changePasswordBodySchema)) body: ChangePasswordBody,
   ): Promise<void> {
     // accountId는 **요청 본문이 아니라 토큰에서** 온다. 본문에서 받으면 남의 계정
-    // 비밀번호를 바꿀 수 있다.
-    await this.changePassword.execute({ accountId: principal.accountId, ...body });
+    // 비밀번호를 바꿀 수 있다. 스프레드 순서도 방어선이다 — accountId를 뒤에 둬서
+    // 스키마가 나중에 그 필드를 허용하게 바뀌어도 토큰 값이 항상 이긴다.
+    await this.changePassword.execute({ ...body, accountId: principal.accountId });
   }
 }

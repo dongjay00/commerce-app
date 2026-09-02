@@ -1,4 +1,4 @@
-import { ErrorCode } from '@commerce/contracts';
+import { authContract, ErrorCode } from '@commerce/contracts';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -33,14 +33,19 @@ describe('인증 흐름', () => {
     const signUp = await request(app.getHttpServer()).post('/auth/sign-up').send(CREDENTIALS);
     expect(signUp.status).toBe(201);
     expect(signUp.body.accessToken).toEqual(expect.any(String));
+    // 서버 자신이 계약에 묶인다 — 반환 타입 선언만으로는 초과 필드를 못 잡는다
+    // (함수 리턴값은 객체 리터럴이 아니라 TS의 초과 프로퍼티 검사가 적용되지 않는다).
+    expect(() => authContract.signUp.responses[201].parse(signUp.body)).not.toThrow();
 
     const signIn = await request(app.getHttpServer()).post('/auth/sign-in').send(CREDENTIALS);
     expect(signIn.status).toBe(200);
+    expect(() => authContract.signIn.responses[200].parse(signIn.body)).not.toThrow();
 
     const refreshed = await request(app.getHttpServer())
       .post('/auth/refresh')
       .send({ refreshToken: signIn.body.refreshToken });
     expect(refreshed.status).toBe(200);
+    expect(() => authContract.refresh.responses[200].parse(refreshed.body)).not.toThrow();
     expect(refreshed.body.refreshToken).not.toBe(signIn.body.refreshToken);
 
     // 회전된 옛 토큰은 죽어 있다.
@@ -124,5 +129,17 @@ describe('인증 흐름', () => {
       .post('/auth/refresh')
       .send({ refreshToken: signUp.body.refreshToken });
     expect(refreshed.status).toBe(401);
+  });
+
+  it('토큰 없이 POST /auth/change-password를 호출하면 401이다 — AccessTokenGuard가 걸려 있다', async () => {
+    // 메서드 레벨 @UseGuards(AccessTokenGuard)에 대한 유일한 테스트다. 메시지로
+    // 가드가 실제로 막았는지(vs. @CurrentPrincipal()의 방어선) 구분한다 —
+    // 가드가 먼저 던지면 '인증 토큰이 없습니다.', 가드 없이 데코레이터가 던지면
+    // '인증 정보가 없습니다.'다.
+    const response = await request(app.getHttpServer())
+      .post('/auth/change-password')
+      .send({ currentPassword: CREDENTIALS.password, newPassword: 'a brand new password 99' });
+    expect(response.status).toBe(401);
+    expect(response.body.message).toBe('인증 토큰이 없습니다.');
   });
 });
