@@ -168,7 +168,7 @@ packages:
 {
   "name": "commerce-app",
   "private": true,
-  "packageManager": "pnpm@9.12.0",
+  "packageManager": "pnpm@11.8.0",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
