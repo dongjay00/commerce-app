@@ -10,6 +10,14 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
-    "sourceMap": true
+    "sourceMap": true,
+    // apps/web/tsconfig.json이 선언한 "@/*" 별칭을 여기서도 알아야 한다 — 이 값을 쓰는
+    // 도구는 apps/web뿐이 아니다. dependency-cruiser는 tsConfig를 이 루트 파일 하나만
+    // 보고 apps/web을 포함한 모든 워크스페이스를 크루징하므로, 별칭이 여기 없으면
+    // "@/..." import는 couldNotResolve가 되어 FSD 규칙이 그 import에 대해서만
+    // 조용히 무력화된다. apps/web/tsconfig.json은 자신의 "paths"를 따로 선언해
+    // (병합이 아니라 완전히 덮어써서) 상대 경로를 그대로 유지하므로 tsc 타입체크에는
+    // 영향이 없다.
+    "paths": { "@/*": ["./apps/web/src/*"] }
   }
 }
