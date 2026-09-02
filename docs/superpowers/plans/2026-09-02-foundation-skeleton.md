@@ -160,6 +160,13 @@ TDD로 만드는 태스크에 함께 접어 넣는다. 이 태스크가 끝나�
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# pnpm 10부터 의존성의 빌드 스크립트는 명시적으로 승인해야 실행된다.
+# 이 항목이 없으면 esbuild의 postinstall이 차단되어
+# `pnpm install`이 ERR_PNPM_IGNORED_BUILDS로 실패하고 vitest가 동작하지 않는다.
+# 나중에 빌드 스크립트가 필요한 의존성(prisma 등)을 추가하면 여기에도 등록해야 한다.
+allowBuilds:
+  esbuild: true
 ```
 
 `package.json`:
