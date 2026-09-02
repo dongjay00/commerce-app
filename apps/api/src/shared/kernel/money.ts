@@ -19,6 +19,10 @@ export interface MoneyDto {
   currency: Currency;
 }
 
+// '0' 또는 앞자리가 0이 아닌 (선택적으로 음수인) 정수 문자열만 허용한다.
+// ''(BigInt('')는 0n), ' 10 '(공백 허용), '007'(선행 0), '-0'(부호 있는 0)을 모두 거부한다.
+const AMOUNT_PATTERN = /^(0|-?[1-9]\d*)$/;
+
 /**
  * 금액 값 객체.
  * 최소 단위(원) 정수만 bigint로 보관한다. 부동소수점은 절대 쓰지 않는다.
@@ -41,6 +45,9 @@ export class Money {
   }
 
   static fromDto(dto: MoneyDto): Money {
+    if (!AMOUNT_PATTERN.test(dto.amount)) {
+      throw new InvalidMoneyError(`금액은 정규화된 정수 문자열이어야 합니다: "${dto.amount}"`);
+    }
     return new Money(BigInt(dto.amount), dto.currency);
   }
 

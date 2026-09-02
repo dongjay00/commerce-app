@@ -87,5 +87,31 @@ describe('Money', () => {
       const original = Money.of(123_456, 'KRW');
       expect(Money.fromDto(original.toDto()).equals(original)).toBe(true);
     });
+
+    it('빈 문자열을 거부한다 — BigInt("")는 0n이라 무검증이면 조용히 0원이 된다', () => {
+      expect(() => Money.fromDto({ amount: '', currency: 'KRW' })).toThrow(InvalidMoneyError);
+    });
+
+    it('앞뒤 공백을 거부한다 — BigInt는 공백을 허용해 통과시킨다', () => {
+      expect(() => Money.fromDto({ amount: ' 10 ', currency: 'KRW' })).toThrow(InvalidMoneyError);
+    });
+
+    it('선행 0을 거부한다 — 정규화되지 않은 표현이다', () => {
+      expect(() => Money.fromDto({ amount: '007', currency: 'KRW' })).toThrow(InvalidMoneyError);
+    });
+
+    it('부호 있는 0을 거부한다 — "-0"은 0의 정규화된 표현이 아니다', () => {
+      expect(() => Money.fromDto({ amount: '-0', currency: 'KRW' })).toThrow(InvalidMoneyError);
+    });
+
+    it('16진수 문자열을 거부한다 — BigInt("0x10")은 16n이다', () => {
+      expect(() => Money.fromDto({ amount: '0x10', currency: 'KRW' })).toThrow(InvalidMoneyError);
+    });
+
+    it('정상 정수 문자열은 통과한다', () => {
+      expect(Money.fromDto({ amount: '0', currency: 'KRW' }).amount).toBe(0n);
+      expect(Money.fromDto({ amount: '-500', currency: 'KRW' }).amount).toBe(-500n);
+      expect(Money.fromDto({ amount: '15000', currency: 'KRW' }).amount).toBe(15000n);
+    });
   });
 });
