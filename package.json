@@ -1,0 +1,19 @@
+{
+  "name": "commerce-app",
+  "private": true,
+  "packageManager": "pnpm@11.8.0",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "pnpm -r --if-present typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.0",
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.2.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.0"
+  }
+}
