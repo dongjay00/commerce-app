@@ -48,6 +48,12 @@ export default defineConfig({
     coverage: {
       thresholds: {
         'apps/api/src/shared/kernel/**': { lines: 95, branches: 90 },
+        // modules/*는 계획 2 전까지 빈 디렉터리라 글롭이 아무것도 매치하지 않는다.
+        // Vitest는 매치 없는 글롭 임계값을 조용히 통과시키므로, 이 두 줄이 있어도
+        // 지금 당장은 아무것도 검증하지 않는다 — 계획 2가 modules/*/domain,
+        // modules/*/application을 채우는 순간부터 의미가 생긴다.
+        'apps/api/src/modules/*/domain/**': { lines: 95, branches: 90 },
+        'apps/api/src/modules/*/application/**': { lines: 90, branches: 85 },
       },
     },
   },

@@ -7,6 +7,7 @@
     "test:watch": "vitest",
     "test:unit": "vitest run --project api-unit",
     "test:int": "vitest run --project api-integration",
+    "test:coverage": "vitest run --coverage",
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "pnpm -r --if-present typecheck",
@@ -16,7 +17,7 @@
     "db:generate": "pnpm --filter @commerce/api db:generate",
     "arch:check": "depcruise --config .dependency-cruiser.js apps packages",
     "arch:graph": "depcruise --config .dependency-cruiser.js --output-type dot apps packages | dot -Tsvg > docs/architecture.svg",
-    "verify": "pnpm lint && pnpm arch:check && pnpm typecheck && pnpm test"
+    "verify": "pnpm lint && pnpm arch:check && pnpm typecheck && pnpm test:coverage"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.0",
