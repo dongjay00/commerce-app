@@ -1540,7 +1540,14 @@ Expected: `PostgreSQL 17.x` 출력
 
 - [ ] **Step 3: Prisma 설치와 스키마 작성**
 
-Run: `pnpm --filter @commerce/api add @prisma/client && pnpm --filter @commerce/api add -D prisma`
+Run: `pnpm --filter @commerce/api add @prisma/client@^7.10.0 && pnpm --filter @commerce/api add -D prisma@^7.10.0`
+
+**버전을 반드시 고정한다.** npm의 `prisma` CLI는 `latest` dist-tag가 프리릴리스(8.0.0-rc)를 가리키는 반면
+`@prisma/client`의 `latest`는 안정판 7.10.0을 가리킨다 — 두 동반 패키지의 태그가 어긋나 있다.
+고정 없이 설치하면 CLI만 RC로 올라가 (a) CLI/client 버전 불일치, (b) RC가 끌어오는
+`@prisma/composer-cli` → `alchemy`(AWS SDK, Cloudflare `workerd` 네이티브 런타임, ~84MB)라는
+이 프로젝트와 무관한 의존성 체인, (c) `workerd`·`msgpackr-extract`에 대한 `ERR_PNPM_IGNORED_BUILDS`가
+한꺼번에 발생한다. CLI와 client는 항상 같은 메이저·마이너로 맞춘다.
 
 `apps/api/prisma/schema.prisma`:
 
