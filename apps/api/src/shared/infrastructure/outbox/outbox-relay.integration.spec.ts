@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { testDb } from '../../../../test/setup/database';
+import { Duration } from '../../kernel/duration';
 import { MutableClock } from '../../testing/mutable-clock';
 import { RecordingEventTransport } from '../../testing/recording-event-transport';
 import { OutboxRelay } from './outbox-relay';
@@ -89,14 +90,21 @@ describe('OutboxRelay', () => {
     await expect(db.outbox.count({ where: { publishedAt: null } })).resolves.toBe(1);
   });
 
-  it('전송이 실패한 이벤트는 미발행으로 남아 다음 라운드에 재시도된다', async () => {
+  it('전송이 실패한 이벤트는 미발행으로 남아 백오프가 지난 다음 라운드에 재시도된다', async () => {
     await seedEvent('Flaky', '2026-01-01T00:00:00Z');
     transport.failWhen((record) => record.eventType === 'Flaky');
 
-    await expect(relay.relayOnce()).rejects.toThrow('전송 실패: Flaky');
+    // relayOnce는 더 이상 던지지 않는다 — 실패는 행 단위로 삼켜지고 배치는 계속된다.
+    await expect(relay.relayOnce()).resolves.toBe(0);
     await expect(db.outbox.count({ where: { publishedAt: null } })).resolves.toBe(1);
 
+    // 백오프가 지나기 전에는 다시 선택되지 않는다.
     transport.succeedAlways();
+    await expect(relay.relayOnce()).resolves.toBe(0);
+    expect(transport.sent).toEqual([]);
+
+    // attempts=1이라 백오프는 2초. 그 시각을 지나야 재선택된다.
+    clock.advanceBy(Duration.seconds(2));
     await expect(relay.relayOnce()).resolves.toBe(1);
     await expect(db.outbox.count({ where: { publishedAt: null } })).resolves.toBe(0);
   });
@@ -106,11 +114,73 @@ describe('OutboxRelay', () => {
     await seedEvent('Bad', '2026-01-02T00:00:00Z');
     transport.failWhen((record) => record.eventType === 'Bad');
 
-    await expect(relay.relayOnce()).rejects.toThrow('전송 실패: Bad');
+    await expect(relay.relayOnce()).resolves.toBe(1);
 
     const good = await db.outbox.findFirst({ where: { eventType: 'Good' } });
     const bad = await db.outbox.findFirst({ where: { eventType: 'Bad' } });
     expect(good?.publishedAt).not.toBeNull();
     expect(bad?.publishedAt).toBeNull();
+  });
+
+  it('영구히 실패하는 이벤트가 있어도 뒤따르는 이벤트는 배달된다 — 독이 든 이벤트가 나머지를 막지 않는다', async () => {
+    await seedEvent('Poison', '2026-01-01T00:00:00Z');
+    await seedEvent('Healthy', '2026-01-02T00:00:00Z');
+    transport.failWhen((record) => record.eventType === 'Poison');
+
+    await expect(relay.relayOnce()).resolves.toBe(1);
+    expect(transport.sent.map((r) => r.eventType)).toEqual(['Healthy']);
+
+    const poison = await db.outbox.findFirst({ where: { eventType: 'Poison' } });
+    const healthy = await db.outbox.findFirst({ where: { eventType: 'Healthy' } });
+    expect(poison?.publishedAt).toBeNull();
+    expect(healthy?.publishedAt).not.toBeNull();
+
+    // 두 번째 폴링에서도 Poison이 여전히 Healthy를 막지 않는다 (이미 발행됐으니 재선택 안 됨).
+    await expect(relay.relayOnce()).resolves.toBe(0);
+  });
+
+  it('전송 실패 시 attempts를 늘리고 last_error를 남긴다', async () => {
+    const id = await seedEvent('Flaky', '2026-01-01T00:00:00Z');
+    transport.failWhen((record) => record.eventType === 'Flaky');
+
+    await relay.relayOnce();
+
+    const row = await db.outbox.findUniqueOrThrow({ where: { id } });
+    expect(row.attempts).toBe(1);
+    expect(row.lastError).toContain('전송 실패: Flaky');
+    expect(row.publishedAt).toBeNull();
+  });
+
+  it('연속 실패마다 attempts가 누적되고 백오프가 매번 뒤로 밀린다', async () => {
+    const id = await seedEvent('Flaky', '2026-01-01T00:00:00Z');
+    transport.failWhen((record) => record.eventType === 'Flaky');
+
+    await relay.relayOnce(); // attempts=1, 백오프 2초
+    clock.advanceBy(Duration.seconds(2));
+    await relay.relayOnce(); // attempts=2, 백오프 4초
+    clock.advanceBy(Duration.seconds(4));
+    await relay.relayOnce(); // attempts=3, 백오프 8초
+
+    const row = await db.outbox.findUniqueOrThrow({ where: { id } });
+    expect(row.attempts).toBe(3);
+    expect(row.publishedAt).toBeNull();
+  });
+
+  it('재시도 한도(MAX_ATTEMPTS)를 넘긴 행은 데드레터 상태로 더 이상 선택되지 않는다', async () => {
+    const id = await seedEvent('Doomed', '2026-01-01T00:00:00Z');
+    // 직접 attempts를 한도까지 올려, 백오프 산수에 결합되지 않고 한도 자체를 검증한다.
+    await db.outbox.update({
+      where: { id },
+      data: { attempts: 5, lastError: '이전 실패 5회' },
+    });
+
+    // 시간을 아무리 지나도 (nextAttemptAt이 없으니) 재선택되지 않아야 한다.
+    clock.advanceBy(Duration.hours(1));
+    await expect(relay.relayOnce()).resolves.toBe(0);
+    expect(transport.sent).toEqual([]);
+
+    const row = await db.outbox.findUniqueOrThrow({ where: { id } });
+    expect(row.publishedAt).toBeNull();
+    expect(row.lastError).toBe('이전 실패 5회');
   });
 });

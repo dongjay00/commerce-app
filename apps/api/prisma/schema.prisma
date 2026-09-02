@@ -16,6 +16,9 @@ model Outbox {
   payload       Json      @db.JsonB
   occurredAt    DateTime  @map("occurred_at") @db.Timestamptz(3)
   publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error")
+  nextAttemptAt DateTime? @map("next_attempt_at") @db.Timestamptz(3)
 
   @@map("outbox")
 }
