@@ -24,3 +24,17 @@ export class SessionRevokedError extends DomainError {
     super(`폐기된 세션입니다: ${sessionId}`);
   }
 }
+
+/**
+ * 제시된 리프레시 토큰과 매치되는 세션이 없다. 회전 때문에 **정상 사용 중에도 발생한다** —
+ * 옛 토큰은 회전 직후부터 어느 행과도 매치되지 않는다. 그래서 이건 공격 신호가 아니라
+ * "다시 로그인하라"는 신호다.
+ */
+export class SessionNotFoundError extends DomainError {
+  static readonly CODE = 'SESSION_NOT_FOUND';
+  readonly code = SessionNotFoundError.CODE;
+
+  constructor() {
+    super('세션을 찾을 수 없습니다.');
+  }
+}

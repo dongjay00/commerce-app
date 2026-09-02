@@ -27,3 +27,19 @@ export class InvalidCredentialsError extends DomainError {
     super('이메일 또는 비밀번호가 올바르지 않습니다.');
   }
 }
+
+/**
+ * 새 비밀번호가 현재 비밀번호와 같다.
+ *
+ * 해시끼리 비교해서는 알 수 없다 — Argon2는 매번 다른 솔트를 쓰므로 같은 비밀번호도
+ * 다른 해시가 나온다. 새 평문을 **현재 해시에 대조**해야만 알 수 있고, 그건 해셔가
+ * 필요하므로 도메인이 아니라 유스케이스의 판단이다.
+ */
+export class SamePasswordError extends DomainError {
+  static readonly CODE = 'SAME_PASSWORD';
+  readonly code = SamePasswordError.CODE;
+
+  constructor() {
+    super('새 비밀번호가 현재 비밀번호와 같습니다.');
+  }
+}
