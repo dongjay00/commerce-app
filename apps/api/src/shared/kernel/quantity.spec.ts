@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidQuantityError, NegativeQuantityError, Quantity } from './quantity';
+import { DomainError } from './domain-error';
+import {
+  InvalidQuantityError,
+  NegativeQuantityError,
+  Quantity,
+  QuantityBelowMinimumError,
+} from './quantity';
 
 describe('Quantity', () => {
   describe('of — 재고 잔량용 (0 이상)', () => {
@@ -26,11 +32,11 @@ describe('Quantity', () => {
     });
 
     it('0을 거부한다 — 장바구니에 수량 0인 줄은 존재할 수 없다', () => {
-      expect(() => Quantity.positive(0)).toThrow(InvalidQuantityError);
+      expect(() => Quantity.positive(0)).toThrow(QuantityBelowMinimumError);
     });
 
     it('음수를 거부한다', () => {
-      expect(() => Quantity.positive(-3)).toThrow(InvalidQuantityError);
+      expect(() => Quantity.positive(-3)).toThrow(QuantityBelowMinimumError);
     });
   });
 
@@ -67,6 +73,25 @@ describe('Quantity', () => {
 
     it('값이 같으면 같다', () => {
       expect(Quantity.of(3).equals(Quantity.of(3))).toBe(true);
+    });
+  });
+
+  describe('예외 분류 — 사용자가 고칠 수 있는 값만 DomainError다', () => {
+    it('QuantityBelowMinimumError는 DomainError다 — 사용자 입력이므로 422로 응답한다', () => {
+      const error = new QuantityBelowMinimumError(0);
+      expect(error).toBeInstanceOf(DomainError);
+      expect(error.code).toBe(QuantityBelowMinimumError.CODE);
+    });
+
+    it('NegativeQuantityError는 DomainError다 — 상태 충돌이므로 409로 응답한다', () => {
+      const error = new NegativeQuantityError(3, 5);
+      expect(error).toBeInstanceOf(DomainError);
+      expect(error.code).toBe(NegativeQuantityError.CODE);
+    });
+
+    it('InvalidQuantityError는 DomainError가 아니다 — 프로그래머 에러이므로 500으로 떨어진다', () => {
+      expect(() => Quantity.of(-1)).toThrow(InvalidQuantityError);
+      expect(new InvalidQuantityError('x')).not.toBeInstanceOf(DomainError);
     });
   });
 });

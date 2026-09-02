@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { SystemClock } from './infrastructure/clock/system-clock';
 import { DomainErrorRegistry } from './infrastructure/http/domain-error.registry';
+import { registerKernelDomainErrors } from './infrastructure/http/kernel-domain-error-mappings';
 import { UuidV7Generator } from './infrastructure/id/uuid-v7.generator';
 import { NestEventEmitterTransport } from './infrastructure/messaging/nest-event-emitter.transport';
 import { OutboxEventPublisher } from './infrastructure/outbox/outbox-event.publisher';
@@ -19,7 +20,14 @@ import { TRANSACTION_MANAGER } from './kernel/ports/transaction-manager';
   imports: [EventEmitterModule.forRoot()],
   providers: [
     PrismaService,
-    DomainErrorRegistry,
+    {
+      provide: DomainErrorRegistry,
+      useFactory: () => {
+        const registry = new DomainErrorRegistry();
+        registerKernelDomainErrors(registry);
+        return registry;
+      },
+    },
     { provide: CLOCK, useClass: SystemClock },
     { provide: ID_GENERATOR, useClass: UuidV7Generator },
     { provide: EVENT_TRANSPORT, useClass: NestEventEmitterTransport },

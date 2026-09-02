@@ -14,7 +14,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
   constructor(private readonly registry: DomainErrorRegistry) {}
 
   catch(exception: DomainError, host: ArgumentsHost): void {
-    const { status, code } = this.registry.resolve(exception.name);
+    const { status, code } = this.registry.resolve(exception.code);
     const body: ErrorDto = { code, message: exception.message };
 
     host.switchToHttp().getResponse<Response>().status(status).json(body);

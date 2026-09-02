@@ -13,7 +13,7 @@ describe('DomainError', () => {
     expect(new SampleDomainError('x')).toBeInstanceOf(Error);
   });
 
-  it('name이 구체 클래스 이름으로 설정된다 — 예외 필터가 이 값으로 매핑한다', () => {
+  it('name이 구체 클래스 이름으로 설정된다 — 스택 트레이스 등 디버깅용이다', () => {
     expect(new SampleDomainError('x').name).toBe('SampleDomainError');
   });
 

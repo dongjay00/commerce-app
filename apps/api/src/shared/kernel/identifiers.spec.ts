@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DomainError } from './domain-error';
 import {
   AccountId,
   AddressId,
@@ -25,6 +26,12 @@ describe('식별자', () => {
 
   it('빈 문자열을 거부한다', () => {
     expect(() => OrderId.of('')).toThrow(InvalidIdError);
+  });
+
+  it('InvalidIdError는 DomainError다 — 검증 우회로 여기 도달해도 400을 정직하게 응답한다', () => {
+    const error = new InvalidIdError('OrderId', 'x');
+    expect(error).toBeInstanceOf(DomainError);
+    expect(error.code).toBe(InvalidIdError.CODE);
   });
 
   it('대문자 UUID는 대소문자를 보존한 채 그대로 반환한다', () => {

@@ -5,8 +5,11 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DomainError } from '../../kernel/domain-error';
+import { InvalidIdError } from '../../kernel/identifiers';
+import { Quantity, QuantityBelowMinimumError } from '../../kernel/quantity';
 import { DomainErrorRegistry } from './domain-error.registry';
 import { DomainExceptionFilter } from './domain-exception.filter';
+import { registerKernelDomainErrors } from './kernel-domain-error-mappings';
 
 class SampleOutOfStockError extends DomainError {
   readonly code = 'SAMPLE_OUT_OF_STOCK';
@@ -38,6 +41,21 @@ class SampleController {
   ok(): { fine: true } {
     return { fine: true };
   }
+
+  @Get('invalid-id')
+  invalidId(): never {
+    throw new InvalidIdError('OrderId', 'not-a-uuid');
+  }
+
+  @Get('quantity-below-minimum')
+  quantityBelowMinimum(): never {
+    throw new QuantityBelowMinimumError(0);
+  }
+
+  @Get('negative-quantity')
+  negativeQuantity(): Quantity {
+    return Quantity.of(1).minus(Quantity.of(2));
+  }
 }
 
 @Module({ controllers: [SampleController], providers: [DomainErrorRegistry] })
@@ -50,10 +68,11 @@ beforeAll(async () => {
   app = moduleRef.createNestApplication();
 
   const registry = app.get(DomainErrorRegistry);
-  registry.register('SampleOutOfStockError', {
+  registry.register(new SampleOutOfStockError().code, {
     status: 409,
     code: ErrorCode.INSUFFICIENT_STOCK,
   });
+  registerKernelDomainErrors(registry);
 
   app.useGlobalFilters(new DomainExceptionFilter(registry));
   await app.init();
@@ -87,5 +106,23 @@ describe('DomainExceptionFilter', () => {
     const response = await request(app.getHttpServer()).get('/sample/ok');
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ fine: true });
+  });
+
+  it('InvalidIdError는 400 VALIDATION_FAILED로 떨어진다', async () => {
+    const response = await request(app.getHttpServer()).get('/sample/invalid-id');
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe(ErrorCode.VALIDATION_FAILED);
+  });
+
+  it('QuantityBelowMinimumError는 422 DOMAIN_RULE_VIOLATED로 떨어진다', async () => {
+    const response = await request(app.getHttpServer()).get('/sample/quantity-below-minimum');
+    expect(response.status).toBe(422);
+    expect(response.body.code).toBe(ErrorCode.DOMAIN_RULE_VIOLATED);
+  });
+
+  it('NegativeQuantityError는 409 DOMAIN_RULE_VIOLATED로 떨어진다', async () => {
+    const response = await request(app.getHttpServer()).get('/sample/negative-quantity');
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe(ErrorCode.DOMAIN_RULE_VIOLATED);
   });
 });

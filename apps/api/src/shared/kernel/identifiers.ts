@@ -1,11 +1,22 @@
+import { DomainError } from './domain-error';
+
 declare const brand: unique symbol;
 
 type Brand<T, B extends string> = T & { readonly [brand]: B };
 
-export class InvalidIdError extends Error {
+/**
+ * UUID 형식이 아닌 값으로 브랜드 ID를 만들려 할 때 던진다. 스펙 §8.4상 UUID
+ * 형식 검증은 어댑터(Zod)의 책임이라 여기 도달하는 건 원칙적으로 프로그래머
+ * 에러다. 그래도 DomainError로 등록해 400을 낸다 — `GET /orders/abc`처럼 이미
+ * 검증을 우회해 값 객체까지 도달한 잘못된 입력에 500을 돌려주는 건 클라이언트에게
+ * 거짓을 말하는 것이기 때문이다(방어적 depth, 정직한 응답).
+ */
+export class InvalidIdError extends DomainError {
+  static readonly CODE = 'INVALID_ID';
+  readonly code = InvalidIdError.CODE;
+
   constructor(kind: string, value: string) {
     super(`${kind}는 UUID 형식이어야 합니다: "${value}"`);
-    this.name = 'InvalidIdError';
   }
 }
 

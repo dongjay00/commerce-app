@@ -7,6 +7,13 @@ export class InvalidMoneyError extends Error {
   }
 }
 
+/**
+ * 서로 다른 통화의 Money끼리 연산하려 할 때 던진다. DomainError로 승격하지 않는다 —
+ * 이게 실제로 발생한다면 사용자 입력 문제가 아니라 Cart가 통화가 다른 라인을
+ * 애초에 허용했다는 뜻이고, 그건 불변식의 구멍이다. 사용자가 고칠 수 없으므로 500이
+ * 맞는 응답이다. TODO(plan 4): Cart에 단일 통화 불변식을 추가해 이 경로 자체가
+ * 발생하지 않도록 한다.
+ */
 export class CurrencyMismatchError extends Error {
   constructor(left: Currency, right: Currency) {
     super(`통화가 다릅니다: ${left} vs ${right}`);
