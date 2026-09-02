@@ -8,6 +8,13 @@ export default defineConfig({
     projects: [
       {
         test: {
+          name: 'contracts',
+          include: ['packages/contracts/src/**/*.spec.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'api-unit',
           include: ['apps/api/src/**/*.spec.ts'],
           exclude: ['**/*.integration.spec.ts'],
