@@ -114,10 +114,10 @@ describe('DomainExceptionFilter', () => {
     expect(response.body.code).toBe(ErrorCode.VALIDATION_FAILED);
   });
 
-  it('QuantityBelowMinimumError는 422 DOMAIN_RULE_VIOLATED로 떨어진다', async () => {
+  it('QuantityBelowMinimumError는 422 QUANTITY_BELOW_MINIMUM으로 떨어진다', async () => {
     const response = await request(app.getHttpServer()).get('/sample/quantity-below-minimum');
     expect(response.status).toBe(422);
-    expect(response.body.code).toBe(ErrorCode.DOMAIN_RULE_VIOLATED);
+    expect(response.body.code).toBe(ErrorCode.QUANTITY_BELOW_MINIMUM);
   });
 
   it('NegativeQuantityError는 409 DOMAIN_RULE_VIOLATED로 떨어진다', async () => {

@@ -24,7 +24,7 @@ export function registerKernelDomainErrors(registry: DomainErrorRegistry): void 
 
   registry.register(QuantityBelowMinimumError.CODE, {
     status: 422,
-    code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    code: ErrorCode.QUANTITY_BELOW_MINIMUM,
   });
 
   registry.register(NegativeQuantityError.CODE, {
