@@ -9,6 +9,8 @@ import { HealthController } from './health.controller';
 
 let app: INestApplication;
 
+const originalDatabaseUrl = process.env['DATABASE_URL'];
+
 beforeAll(async () => {
   // PrismaService는 생성 시점에 process.env['DATABASE_URL']을 읽는다.
   // 이 워커 전용 테스트 DB(testDb()가 없으면 만든다)를 가리키도록 맞춘 뒤 컨트롤러를 조립한다.
@@ -26,6 +28,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
+  if (originalDatabaseUrl === undefined) {
+    delete process.env['DATABASE_URL'];
+  } else {
+    process.env['DATABASE_URL'] = originalDatabaseUrl;
+  }
 });
 
 describe('GET /health', () => {
