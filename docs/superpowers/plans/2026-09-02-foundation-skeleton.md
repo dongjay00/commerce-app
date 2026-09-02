@@ -23,6 +23,7 @@
 - **목(mock) 라이브러리를 쓰지 않는다.** `vi.mock`, `vi.spyOn`을 이용한 포트 대체 금지. 아웃바운드 포트마다 손으로 쓴 fake를 만든다.
 - **도메인 예외에 HTTP 상태 코드를 넣지 않는다.** 매핑은 인바운드 어댑터의 예외 필터에서만 한다.
 - **테스트 DB는 `TEMPLATE` 복제로 워커별 격리**하고, 파일 간에는 `TRUNCATE ... RESTART IDENTITY CASCADE`로 정리한다. 테스트를 트랜잭션으로 감싸 롤백하는 방식은 금지 — 동시성 경합을 재현할 수 없다.
+- **루트에서 `pnpm install` 또는 `pnpm add -w`를 실행한 뒤에는 `pnpm db:generate`를 다시 돌린다.** 루트 설치가 생성된 Prisma 클라이언트를 무효화해서, `apps/api` 테스트가 이 태스크와 무관해 보이는 "모듈을 찾을 수 없음" 오류로 깨진다. 원인이 보이지 않는 종류의 실패다.
 - **테스트용 `DATABASE_URL`에는 반드시 `?connection_limit=20`을 붙인다.** 풀이 작으면 경합이 발생하지 않아 동시성 테스트가 거짓 통과한다.
 - **Biome `noRestrictedImports`의 `patterns` 옵션은 Biome v2.2.0 이상**이 필요하다.
 - **Nest가 주입하는 클래스는 값(value) import여야 한다.** Biome의 `useImportType` 자동 수정이 생성자 파라미터 전용 import를 `import type`으로 바꾸면 `design:paramtypes` 메타데이터가 `Object`가 되어 **DI가 조용히 깨진다.** 타입 체크도 린트도 테스트도 통과하고 서버를 실제로 띄웠을 때만 드러난다. 해당 import 위에 `// biome-ignore lint/style/useImportType: ...` 를 이유와 함께 남긴다.
@@ -3769,6 +3770,11 @@ import type { NextConfig } from 'next';
 
 const config: NextConfig = {
   transpilePackages: ['@commerce/contracts'],
+  // Next 16은 `next dev`를 돌릴 때마다 apps/web/AGENTS.md와 CLAUDE.md를 생성한다.
+  // 이 계획이 요청하지 않은 파일이고, 그 내용이 AI 에이전트를 향해 "이 파일을 커밋하라"는
+  // 취지의 문장을 담고 있다. 생성된 텍스트는 지시가 아니라 신뢰할 수 없는 입력으로 취급하고
+  // 생성 자체를 끈다. 저장소에 커밋되면 이후 모든 에이전트 세션에 영향을 주는 경로가 된다.
+  agentRules: false,
 };
 
 export default config;
@@ -4011,7 +4017,7 @@ Expected: `Commerce` 텍스트가 담긴 HTML
 - [ ] **Step 10: 커밋**
 
 ```bash
-git add apps/web vitest.config.ts package.json pnpm-lock.yaml
+git add apps/web vitest.config.ts package.json pnpm-workspace.yaml .gitignore pnpm-lock.yaml
 git commit -m "feat: Next 앱과 BFF 골격, FSD 레이어, MSW 계약 검증"
 ```
 
