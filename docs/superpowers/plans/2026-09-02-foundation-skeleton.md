@@ -4158,7 +4158,12 @@ module.exports = {
     doNotFollow: { path: 'node_modules' },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.base.json' },
-    exclude: { path: '(node_modules|\\.next|dist|coverage)' },
+    // `exclude`에 node_modules를 넣지 말 것. exclude는 그래프에서 해당 모듈로 향하는
+    // **엣지 자체를 제거**하므로, `domain/**`이 `@nestjs/*`를 import해도 그 의존성이
+    // 그래프에 존재하지 않게 되어 kernel-is-pure 규칙이 영원히 발화하지 않는다.
+    // arch:check가 위반이 있는 코드베이스에서 exit 0으로 통과한다 — 아무것도 검사하지 않으면서.
+    // 재귀만 멈추면 충분하고, 그건 위의 doNotFollow가 이미 한다.
+    exclude: { path: '(\\.next|dist|coverage)' },
     reporterOptions: {
       dot: { collapsePattern: 'node_modules/(@[^/]+/[^/]+|[^/]+)' },
     },
