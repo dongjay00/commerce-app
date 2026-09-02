@@ -24,6 +24,28 @@ module.exports = {
       },
     },
     {
+      // kernel-is-pure/domain-is-pure는 @nestjs, @prisma 등 미리 생각해둔 이름만 막는
+      // 차단 목록이라 zod, axios, date-fns 같은 임의의 npm 패키지가 새는 것은
+      // 잡지 못한다. 허용 목록으로 뒤집어 npm 의존성 자체를 원천 차단한다.
+      //
+      // 유일한 예외는 vitest다 — 커널/도메인의 스펙 파일이 테스트 러너를 쓰는 것은
+      // 정상이고 막을 이유가 없다. 이건 나열이 빠뜨린 구멍이 아니라 의도적으로 내린
+      // 정책 결정이다: "커널과 도메인은 스펙을 포함해 vitest 외의 어떤 npm 패키지도
+      // 모른다." 새 예외가 필요해지면(테스트 더블 라이브러리 등) 여기에 명시적으로
+      // 추가할 것 — pathNot을 넓히지 말고 목록에 한 줄 더한다.
+      // pnpm의 실제 해석 경로(node_modules/.pnpm/vitest@.../node_modules/vitest/...)에서
+      // 'node_modules/vitest/' 세그먼트로 앵커링해, 'vitest-mock-extended' 같은
+      // 이름만 비슷한 패키지까지 같이 허용해버리지 않게 했다.
+      name: 'kernel-and-domain-use-no-npm-packages',
+      comment: '커널과 도메인은 vitest를 제외한 어떤 npm 패키지도 import하지 않는다. 예외를 늘리려면 여기에 명시적으로 적는다.',
+      severity: 'error',
+      from: { path: '(apps/api/src/shared/kernel|apps/api/src/modules/[^/]+/domain)' },
+      to: {
+        dependencyTypes: ['npm', 'npm-dev', 'npm-optional', 'npm-peer'],
+        pathNot: 'node_modules/vitest/',
+      },
+    },
+    {
       name: 'domain-must-not-know-dto',
       comment: '도메인 → DTO 변환은 어댑터의 매퍼가 한다',
       severity: 'error',
