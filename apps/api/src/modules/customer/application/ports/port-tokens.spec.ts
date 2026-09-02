@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { MANAGE_ADDRESSES_USECASE } from './in/manage-addresses.usecase';
 import { PROVISION_CUSTOMER_USECASE } from './in/provision-customer.usecase';
+import { FIND_CUSTOMER_BY_ACCOUNT_QUERY } from './in/queries/find-customer-by-account.query';
 import { GET_ADDRESS_BOOK_QUERY } from './in/queries/get-address-book.query';
 import { ADDRESS_QUERY } from './out/address.query';
 import { CUSTOMER_REPOSITORY } from './out/customer.repository';
 
 /**
- * 다섯 개 포트 토큰을 값으로 임포트해 정체성을 고정한다.
+ * 여섯 개 포트 토큰을 값으로 임포트해 정체성을 고정한다.
  *
  * 이 포트 파일들은 인터페이스 하나와 `Symbol` 하나가 전부라, 이 파일을 쓰는 서비스가
  * 아직 없으면(태스크 13 이전) 아무 spec도 이 파일들을 값으로 로드하지 않는다. Vitest의
@@ -26,6 +27,7 @@ describe('Customer 포트 토큰', () => {
     { token: PROVISION_CUSTOMER_USECASE, name: 'ProvisionCustomerUseCase' },
     { token: MANAGE_ADDRESSES_USECASE, name: 'ManageAddressesUseCase' },
     { token: GET_ADDRESS_BOOK_QUERY, name: 'GetAddressBookQuery' },
+    { token: FIND_CUSTOMER_BY_ACCOUNT_QUERY, name: 'FindCustomerByAccountQuery' },
   ];
 
   it.each(tokens)('$name 토큰은 심볼이고 설명이 포트 이름과 정확히 일치한다', ({ token, name }) => {
@@ -33,7 +35,7 @@ describe('Customer 포트 토큰', () => {
     expect(token.description).toBe(name);
   });
 
-  it('다섯 토큰은 서로 다르다', () => {
+  it('여섯 토큰은 서로 다르다', () => {
     const unique = new Set(tokens.map((t) => t.token));
     expect(unique.size).toBe(tokens.length);
   });

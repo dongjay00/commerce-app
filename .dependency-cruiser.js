@@ -60,6 +60,28 @@ module.exports = {
       to: { path: '(/adapters/|node_modules/@prisma|apps/api/src/shared/infrastructure)' },
     },
     {
+      // shared는 모든 모듈이 의존하는 바닥이다. 반대 방향이 생기면 순환이 만들어지고,
+      // "공유 커널"이라는 말이 "아무나 아무거나 넣는 곳"이 된다.
+      // 이 계획에서 실제로 유혹이 있었다: 인증 가드가 identity의 TokenIssuer를
+      // 직접 부르면 편하다. 그 지름길이 identity↔customer 순환을 만든다.
+      name: 'shared-knows-no-modules',
+      comment: 'shared는 어느 모듈도 모른다. 반대 방향만 허용된다',
+      severity: 'error',
+      from: { path: 'apps/api/src/shared' },
+      to: { path: 'apps/api/src/modules' },
+    },
+    {
+      // no-cross-module-internals는 index.ts를 통한 참조를 허용하는데, 그 예외가
+      // 도메인 계층에도 적용된다. 도메인이 다른 컨텍스트의 공개 API를 직접 부르면
+      // 컨텍스트 간 통신이 포트를 우회하고(스펙 §4.1), 도메인 테스트가 다른
+      // 모듈 전체를 끌고 온다.
+      name: 'domain-imports-no-other-module',
+      comment: '도메인은 다른 컨텍스트를 공개 API로도 부르지 않는다. ACL 포트로만 간다',
+      severity: 'error',
+      from: { path: 'apps/api/src/modules/([^/]+)/domain' },
+      to: { path: 'apps/api/src/modules/(?!$1/)[^/]+/' },
+    },
+    {
       // domain/application/adapters를 나열하는 대신 "허용되는 건 index.ts뿐"으로
       // 뒤집는다 — 스펙 9.1이 못박은 네 번째 디렉터리 modules/*/testing/도
       // 나열 목록에선 빠지기 쉽지만 이 형태에서는 자동으로 막힌다.

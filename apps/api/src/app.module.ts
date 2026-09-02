@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { CustomerModule } from './modules/customer';
+import { IdentityModule } from './modules/identity';
 import { HealthController } from './shared/infrastructure/http/health.controller';
 import { SharedModule } from './shared/shared.module';
 
 @Module({
-  imports: [SharedModule],
+  imports: [SharedModule, IdentityModule, CustomerModule],
   controllers: [HealthController],
 })
 export class AppModule {}

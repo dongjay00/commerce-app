@@ -3,6 +3,11 @@ import { ApplicationConfig } from '@nestjs/core';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from './app.module';
+import { AddressController } from './modules/customer/adapters/in/http/address.controller';
+import { AddressNotFoundError } from './modules/customer/domain/customer.errors';
+import { AuthController } from './modules/identity/adapters/in/http/auth.controller';
+import { EmailAlreadyRegisteredError } from './modules/identity/domain/account.errors';
+import { SessionRevokedError } from './modules/identity/domain/session.errors';
 import { JwtTokenService } from './shared/infrastructure/auth/jwt-token.service';
 import { AccessTokenGuard } from './shared/infrastructure/http/access-token.guard';
 import { DomainErrorRegistry } from './shared/infrastructure/http/domain-error.registry';
@@ -113,6 +118,27 @@ describe('AppModule DI 그래프', () => {
       code: ErrorCode.VALIDATION_FAILED,
     });
     expect(registry.resolve(UnauthenticatedError.CODE)).toEqual({
+      status: 401,
+      code: ErrorCode.UNAUTHENTICATED,
+    });
+  });
+
+  it('두 컨트롤러가 유스케이스를 주입받는다', () => {
+    expect(moduleRef.get(AuthController)).toBeInstanceOf(AuthController);
+    expect(moduleRef.get(AddressController)).toBeInstanceOf(AddressController);
+  });
+
+  it('identity·customer 도메인 예외 매핑이 모두 등록되어 있다', () => {
+    const registry = moduleRef.get(DomainErrorRegistry);
+    expect(registry.resolve(EmailAlreadyRegisteredError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.EMAIL_ALREADY_REGISTERED,
+    });
+    expect(registry.resolve(AddressNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
+    expect(registry.resolve(SessionRevokedError.CODE)).toEqual({
       status: 401,
       code: ErrorCode.UNAUTHENTICATED,
     });
