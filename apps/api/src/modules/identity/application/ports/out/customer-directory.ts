@@ -18,3 +18,15 @@ export interface CustomerDirectory {
 }
 
 export const CUSTOMER_DIRECTORY = Symbol('CustomerDirectory');
+
+/**
+ * 계정은 있는데 대응하는 고객이 없다. 가입이 한 트랜잭션에서 둘을 만들므로 정상
+ * 경로에서는 발생할 수 없다 — 발생했다면 데이터가 깨진 것이다. `DomainError`로
+ * 만들지 않아 500으로 떨어진다.
+ */
+export class CustomerNotProvisionedError extends Error {
+  constructor(accountId: string) {
+    super(`계정 ${accountId}에 대응하는 고객이 없습니다.`);
+    this.name = 'CustomerNotProvisionedError';
+  }
+}
