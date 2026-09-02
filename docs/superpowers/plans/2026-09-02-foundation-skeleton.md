@@ -178,6 +178,7 @@ packages:
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.0",
+    "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.2.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.0"
@@ -254,9 +255,18 @@ export default defineConfig({
   "type": "commonjs",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.0"
   }
 }
 ```
+
+`vitest`와 `@types/node`를 루트뿐 아니라 이 패키지에도 선언하는 것은 필수다.
+pnpm 기본 격리 링크에서는 루트 devDependency가 `apps/api/node_modules`에 나타나지 않아,
+`tsc`가 spec 파일의 `import { describe } from 'vitest'`를 해결하지 못한다.
 
 `apps/api/tsconfig.json`:
 
@@ -271,10 +281,13 @@ export default defineConfig({
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["**/*.spec.ts", "**/*.integration.spec.ts"]
+  "include": ["src/**/*.ts"]
 }
 ```
+
+`exclude`를 두지 않는 것은 의도적이다. spec 파일이 타입 체크에서 빠지면 Task 2 Step 9의
+branded 타입 검증이 무의미해지고, 테스트 코드의 타입 오류가 CI를 통과한다.
+(`build` 스크립트가 dist에 spec을 방출하는 것은 계획 2에서 `tsconfig.build.json`으로 분리한다.)
 
 - [ ] **Step 2: 의존성 설치**
 
@@ -2765,6 +2778,11 @@ git commit -m "feat: OutboxRelay와 EventTransport 포트"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.0"
   }
 }
 ```
@@ -3548,7 +3566,7 @@ MSW 핸들러가 `@commerce/contracts` 스키마로 응답을 검증하게 해�
 
 ```bash
 pnpm --filter @commerce/web add next react react-dom @ts-rest/core @commerce/contracts server-only
-pnpm --filter @commerce/web add -D @types/react @types/react-dom
+pnpm --filter @commerce/web add -D @types/react @types/react-dom @types/node typescript vitest
 pnpm add -D -w @testing-library/react @testing-library/jest-dom jsdom msw
 ```
 
@@ -4051,12 +4069,15 @@ Expected: 둘 다 통과
 
 - [ ] **Step 6: 의존성 그래프 생성**
 
-graphviz가 설치되어 있지 않으면 먼저 설치한다.
+그래프는 검증이 아니라 산출물이므로 **선택 사항**이다. graphviz가 없고 설치 권한도 없으면
+건너뛰고 다음 스텝으로 진행한다 (계획 5에서 다시 시도한다).
 
-Run: `dot -V || sudo apt-get install -y graphviz`
-Run: `pnpm arch:graph`
-Expected: `docs/architecture.svg` 생성. 파일을 열어 `kernel`이 `infrastructure`를
-향하는 화살표가 **없는지** 확인한다 (의존성은 안쪽으로만 향해야 한다).
+Run: `dot -V`
+- 사용 가능하면 → `pnpm arch:graph` 실행. `docs/architecture.svg`가 생성되고,
+  `kernel`에서 `infrastructure`로 향하는 화살표가 **없는지** 확인한다
+  (의존성은 안쪽으로만 향해야 한다).
+- 사용 불가하면 → 이 스텝을 건너뛰고 보고서에 "graphviz 미설치로 arch:graph 생략"이라고 적는다.
+  `sudo`로 설치를 시도하지 않는다.
 
 - [ ] **Step 7: README 작성**
 
@@ -4128,7 +4149,8 @@ Expected: lint, arch:check, typecheck, test 전부 통과.
 - [ ] **Step 9: 커밋**
 
 ```bash
-git add .dependency-cruiser.js biome.jsonc package.json README.md docs/architecture.svg
+git add .dependency-cruiser.js biome.jsonc package.json README.md
+git add docs/architecture.svg 2>/dev/null || true   # graphviz가 없으면 생략됨
 git commit -m "chore: 아키텍처 경계 강제와 verify 파이프라인"
 ```
 
