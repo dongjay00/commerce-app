@@ -51,9 +51,17 @@ describe('outbox 릴레이 쿼리가 부분 인덱스를 실제로 쓰는지', (
     `);
     await db.$executeRawUnsafe('ANALYZE outbox');
 
+    // OutboxRelay.relayOnce()(apps/api/src/shared/infrastructure/outbox/outbox-relay.ts)가
+    // 실제로 던지는 조건과 정렬·LIMIT을 그대로 따라간다. next_attempt_at 분기(백오프)를
+    // 빠뜨리면 이 테스트는 릴레이가 실행하지도 않는 쿼리를 검사하는 셈이 된다.
+    // attempts < 10 은 OutboxRelay.MAX_ATTEMPTS(=10)와 수동으로 맞춰둔 값이다 —
+    // 그 상수가 바뀌면 이 리터럴도 같이 바꿔야 한다.
+    const now = new Date().toISOString();
     const plan = await db.$queryRawUnsafe<Array<{ 'QUERY PLAN': string }>>(`
       EXPLAIN SELECT id FROM outbox
-        WHERE published_at IS NULL AND attempts < 10
+        WHERE published_at IS NULL
+          AND attempts < 10
+          AND (next_attempt_at IS NULL OR next_attempt_at <= '${now}'::timestamptz)
         ORDER BY occurred_at ASC
         LIMIT 100
     `);
