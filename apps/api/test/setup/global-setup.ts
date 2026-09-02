@@ -28,16 +28,20 @@ export default async function globalSetup(): Promise<void> {
 
   const admin = new Client({ connectionString: adminUrl });
   await admin.connect();
+  try {
+    const leftovers = await admin.query<{ datname: string }>(
+      `SELECT datname FROM pg_database WHERE datname LIKE 'commerce_test%'`,
+    );
+    for (const row of leftovers.rows) {
+      await dropDatabase(admin, row.datname);
+    }
 
-  const leftovers = await admin.query<{ datname: string }>(
-    `SELECT datname FROM pg_database WHERE datname LIKE 'commerce_test%'`,
-  );
-  for (const row of leftovers.rows) {
-    await dropDatabase(admin, row.datname);
+    await admin.query(`CREATE DATABASE "${TEMPLATE_DB}"`);
+  } finally {
+    // query()가 던지면 여기 없이는 end()에 도달하지 못해 실패할 때마다 커넥션이 하나씩 샌다.
+    // globalSetup은 pnpm verify마다 정확히 한 번 돈다.
+    await admin.end();
   }
-
-  await admin.query(`CREATE DATABASE "${TEMPLATE_DB}"`);
-  await admin.end();
 
   execSync('pnpm --filter @commerce/api exec prisma migrate deploy', {
     env: { ...process.env, DATABASE_URL: `${baseUrl}/${TEMPLATE_DB}` },

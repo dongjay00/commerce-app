@@ -11,3 +11,5 @@ coverage/
 playwright-report/
 test-results/
 .superpowers/
+# arch:graph의 중간 산출물. dot 단계가 실패하면 정리(rm)까지 못 가고 남을 수 있다.
+docs/architecture.dot

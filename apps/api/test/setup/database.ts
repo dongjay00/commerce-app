@@ -38,13 +38,17 @@ export async function testDb(): Promise<PrismaClient> {
 
   const admin = new Client({ connectionString: requireEnv('TEST_DATABASE_ADMIN_URL') });
   await admin.connect();
-  const existing = await admin.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [
-    databaseName,
-  ]);
-  if (existing.rowCount === 0) {
-    await admin.query(`CREATE DATABASE "${databaseName}" TEMPLATE "${TEMPLATE_DB}"`);
+  try {
+    const existing = await admin.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [
+      databaseName,
+    ]);
+    if (existing.rowCount === 0) {
+      await admin.query(`CREATE DATABASE "${databaseName}" TEMPLATE "${TEMPLATE_DB}"`);
+    }
+  } finally {
+    // query()가 던지면 여기 없이는 end()에 도달하지 못해 실패할 때마다 커넥션이 하나씩 샌다.
+    await admin.end();
   }
-  await admin.end();
 
   const adapter = new PrismaPg({
     connectionString: `${baseUrl}/${databaseName}`,
