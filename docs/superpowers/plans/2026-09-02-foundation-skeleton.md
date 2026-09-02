@@ -657,9 +657,7 @@ export class Quantity {
   private constructor(readonly value: number) {}
 
   static of(value: number): Quantity {
-    if (!Number.isInteger(value)) {
-      throw new InvalidQuantityError(`수량은 정수여야 합니다: ${value}`);
-    }
+    Quantity.assertInteger(value);
     if (value < 0) {
       throw new InvalidQuantityError(`수량은 0 이상이어야 합니다: ${value}`);
     }
@@ -667,13 +665,18 @@ export class Quantity {
   }
 
   static positive(value: number): Quantity {
-    if (!Number.isInteger(value)) {
-      throw new InvalidQuantityError(`수량은 정수여야 합니다: ${value}`);
-    }
+    Quantity.assertInteger(value);
     if (value < 1) {
       throw new InvalidQuantityError(`수량은 1 이상이어야 합니다: ${value}`);
     }
     return new Quantity(value);
+  }
+
+  // 정수 검사는 두 팩토리가 공유한다. 범위 검사는 서로 달라야 하므로 각자 남긴다.
+  private static assertInteger(value: number): void {
+    if (!Number.isInteger(value)) {
+      throw new InvalidQuantityError(`수량은 정수여야 합니다: ${value}`);
+    }
   }
 
   plus(other: Quantity): Quantity {
