@@ -3,12 +3,17 @@ import { ApplicationConfig } from '@nestjs/core';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from './app.module';
+import { JwtTokenService } from './shared/infrastructure/auth/jwt-token.service';
+import { AccessTokenGuard } from './shared/infrastructure/http/access-token.guard';
 import { DomainErrorRegistry } from './shared/infrastructure/http/domain-error.registry';
 import { DomainExceptionFilter } from './shared/infrastructure/http/domain-exception.filter';
 import { HealthController } from './shared/infrastructure/http/health.controller';
+import { UnauthenticatedError } from './shared/infrastructure/http/unauthenticated.error';
+import { ValidationFailedError } from './shared/infrastructure/http/zod-validation.pipe';
 import { OutboxRelay } from './shared/infrastructure/outbox/outbox-relay';
 import { PrismaService } from './shared/infrastructure/prisma/prisma.service';
 import { InvalidIdError } from './shared/kernel/identifiers';
+import { ACCESS_TOKEN_VERIFIER } from './shared/kernel/ports/access-token-verifier';
 import { CLOCK } from './shared/kernel/ports/clock';
 import { DOMAIN_EVENT_PUBLISHER } from './shared/kernel/ports/domain-event.publisher';
 import { EVENT_TRANSPORT } from './shared/kernel/ports/event-transport';
@@ -91,5 +96,51 @@ describe('AppModule DI 그래프', () => {
       status: 400,
       code: ErrorCode.VALIDATION_FAILED,
     });
+  });
+
+  it('AccessTokenGuard가 해석되고 검증기를 주입받는다', () => {
+    expect(moduleRef.get(AccessTokenGuard)).toBeInstanceOf(AccessTokenGuard);
+  });
+
+  it('ACCESS_TOKEN_VERIFIER가 JwtTokenService로 해석된다', () => {
+    expect(moduleRef.get(ACCESS_TOKEN_VERIFIER)).toBe(moduleRef.get(JwtTokenService));
+  });
+
+  it('검증·인증 예외 매핑이 등록되어 있다', () => {
+    const registry = moduleRef.get(DomainErrorRegistry);
+    expect(registry.resolve(ValidationFailedError.CODE)).toEqual({
+      status: 400,
+      code: ErrorCode.VALIDATION_FAILED,
+    });
+    expect(registry.resolve(UnauthenticatedError.CODE)).toEqual({
+      status: 401,
+      code: ErrorCode.UNAUTHENTICATED,
+    });
+  });
+});
+
+describe('AppModule 부팅 — JWT_SECRET 검증', () => {
+  it('JWT_SECRET이 32자 미만이면 컴파일(부팅)이 실패한다', async () => {
+    // SharedModule의 JwtTokenService 팩토리가 readJwtConfig(process.env)를 실제로
+    // 호출하는지는 이 테스트만이 증명한다 — jwt.config.spec.ts는 함수 자체를
+    // 직접 호출해서 검증했을 뿐, 어떤 모듈도 부팅 시점에 그 함수를 부르지 않았다면
+    // 짧은 JWT_SECRET은 첫 로그인 요청에서야 500으로 드러났을 것이다.
+    //
+    // process.env는 워커 프로세스 전역이라, 여기서 덮어쓴 값을 되돌리지 않으면
+    // 같은 워커에서 나중에 도는 다른 스펙이 이 짧은 값을 물려받는다 — 이전 태스크가
+    // health.controller.integration.spec.ts에서 정확히 이 문제를 겪고 고쳤다.
+    const original = process.env['JWT_SECRET'];
+    process.env['JWT_SECRET'] = 'short';
+    try {
+      await expect(Test.createTestingModule({ imports: [AppModule] }).compile()).rejects.toThrow(
+        /32/,
+      );
+    } finally {
+      if (original === undefined) {
+        delete process.env['JWT_SECRET'];
+      } else {
+        process.env['JWT_SECRET'] = original;
+      }
+    }
   });
 });

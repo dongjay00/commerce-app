@@ -1,7 +1,10 @@
 import { Global, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { readJwtConfig } from './infrastructure/auth/jwt.config';
+import { JwtTokenService } from './infrastructure/auth/jwt-token.service';
 import { SystemClock } from './infrastructure/clock/system-clock';
+import { AccessTokenGuard } from './infrastructure/http/access-token.guard';
 import { DomainErrorRegistry } from './infrastructure/http/domain-error.registry';
 import { DomainExceptionFilter } from './infrastructure/http/domain-exception.filter';
 import { registerKernelDomainErrors } from './infrastructure/http/kernel-domain-error-mappings';
@@ -11,6 +14,7 @@ import { OutboxEventPublisher } from './infrastructure/outbox/outbox-event.publi
 import { OutboxRelay } from './infrastructure/outbox/outbox-relay';
 import { PrismaService } from './infrastructure/prisma/prisma.service';
 import { PrismaTransactionManager } from './infrastructure/prisma/prisma-transaction-manager';
+import { ACCESS_TOKEN_VERIFIER } from './kernel/ports/access-token-verifier';
 import { CLOCK, type Clock } from './kernel/ports/clock';
 import { DOMAIN_EVENT_PUBLISHER } from './kernel/ports/domain-event.publisher';
 import { EVENT_TRANSPORT, type EventTransport } from './kernel/ports/event-transport';
@@ -54,6 +58,15 @@ import { TRANSACTION_MANAGER } from './kernel/ports/transaction-manager';
         new OutboxRelay(prisma, transport, clock),
       inject: [PrismaService, EVENT_TRANSPORT, CLOCK],
     },
+    // JwtConfig는 인터페이스라 DI로 해석할 수 없다. 팩토리로 만든다.
+    // 잘못된 설정은 여기서 부팅을 실패시킨다 — 첫 로그인 요청에서 500으로 드러나는
+    // 것보다 낫다.
+    {
+      provide: JwtTokenService,
+      useFactory: () => new JwtTokenService(readJwtConfig(process.env)),
+    },
+    { provide: ACCESS_TOKEN_VERIFIER, useExisting: JwtTokenService },
+    AccessTokenGuard,
   ],
   exports: [
     PrismaService,
@@ -64,6 +77,9 @@ import { TRANSACTION_MANAGER } from './kernel/ports/transaction-manager';
     EVENT_TRANSPORT,
     TRANSACTION_MANAGER,
     DOMAIN_EVENT_PUBLISHER,
+    JwtTokenService,
+    ACCESS_TOKEN_VERIFIER,
+    AccessTokenGuard,
   ],
 })
 export class SharedModule {}

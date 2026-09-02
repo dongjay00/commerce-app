@@ -9,7 +9,13 @@
     "lineWidth": 100
   },
   "linter": { "enabled": true, "rules": { "recommended": true } },
-  "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always" } },
+  "javascript": {
+    "formatter": { "quoteStyle": "single", "semicolons": "always" },
+    // Nest의 `@Inject(TOKEN)` 생성자 매개변수 데코레이터를 파싱하려면 필요하다
+    // (AccessTokenGuard가 심볼 토큰을 주입받는 첫 사례). TS는 이미
+    // experimentalDecorators로 이 문법을 지원한다 — biome이 이를 따라잡는 옵션이다.
+    "parser": { "unsafeParameterDecoratorsEnabled": true }
+  },
   "overrides": [
     {
       "includes": ["apps/api/src/shared/kernel/**", "apps/api/src/modules/*/domain/**"],
