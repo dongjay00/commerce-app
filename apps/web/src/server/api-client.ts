@@ -1,6 +1,8 @@
+import 'server-only';
 import { sessionTokensSchema } from '@commerce/contracts';
 import { type ApiFetcher, type ApiFetcherArgs, tsRestFetchApi } from '@ts-rest/core';
 import { createContractClient } from '../shared/api/contract-client';
+import { readJsonBody } from './safe-json';
 import type { TokenStore, Tokens } from './token-store';
 
 /**
@@ -27,8 +29,9 @@ async function refreshTokens(baseUrl: string, refreshToken: string): Promise<Tok
     return null;
   }
   // 계약 스키마로 파싱한다. 서버가 형태를 바꾸면 여기서 즉시 깨진다 —
-  // undefined 토큰을 헤더에 실어 보내는 것보다 낫다.
-  const parsed = sessionTokensSchema.safeParse(await response.json());
+  // undefined 토큰을 헤더에 실어 보내는 것보다 낫다. 본문이 JSON조차 아니면
+  // (프록시의 HTML 502 등) readJsonBody가 null을 돌려주고 여기서 그대로 실패한다.
+  const parsed = sessionTokensSchema.safeParse(await readJsonBody(response));
   if (!parsed.success) {
     return null;
   }

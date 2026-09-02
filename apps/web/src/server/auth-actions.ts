@@ -4,6 +4,7 @@ import {
   type SignInBody,
   sessionTokensSchema,
 } from '@commerce/contracts';
+import { readJsonBody } from './safe-json';
 import type { TokenStore } from './token-store';
 
 export interface AuthDeps {
@@ -25,7 +26,9 @@ export async function signInAction(input: SignInBody, deps: AuthDeps): Promise<S
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
-  const body: unknown = await response.json();
+  // 본문이 JSON조차 아니면(프록시의 HTML 502 등) readJsonBody가 null을 돌려주고,
+  // 아래 스키마 파싱이 "계약과 다른 응답"과 동일한 경로로 실패한다.
+  const body: unknown = await readJsonBody(response);
 
   if (response.ok) {
     const parsed = sessionTokensSchema.safeParse(body);

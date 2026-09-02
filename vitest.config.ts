@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { config } from 'dotenv';
 import swc from 'unplugin-swc';
 import { defineConfig } from 'vitest/config';
@@ -37,6 +38,14 @@ export default defineConfig({
         },
       },
       {
+        resolve: {
+          alias: {
+            // `server-only`는 Next 번들러가 클라이언트 번들에서 이 모듈을 만나면 throw하게
+            // 만드는 빌드 타임 트릭이다 — 번들러가 아닌 vitest 안에서는 의미가 없으므로
+            // web 프로젝트에서만 빈 모듈로 치환한다. 실제 Next 빌드는 진짜 패키지를 쓴다.
+            'server-only': path.resolve(process.cwd(), 'apps/web/test/server-only-stub.ts'),
+          },
+        },
         test: {
           name: 'web',
           include: ['apps/web/src/**/*.spec.{ts,tsx}'],

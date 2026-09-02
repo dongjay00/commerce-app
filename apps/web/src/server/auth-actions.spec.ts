@@ -83,6 +83,26 @@ describe('signInAction', () => {
     });
     expect(await store.read()).toBeNull();
   });
+
+  it('응답이 JSON이 아니면(프록시의 HTML 502 등) 내부 오류로 처리한다', async () => {
+    // response.json()이 예외를 던지면 안 된다 — 계약과 다른 응답과 같은 경로로 처리한다.
+    server.use(
+      http.post(
+        `${BASE}/auth/sign-in`,
+        () => new HttpResponse('<html>Bad Gateway</html>', { status: 502 }),
+      ),
+    );
+    const store = new InMemoryTokenStore(null);
+
+    const result = await signInAction(CREDENTIALS, { baseUrl: BASE, store });
+
+    expect(result).toEqual({
+      ok: false,
+      code: ErrorCode.INTERNAL_ERROR,
+      message: expect.any(String),
+    });
+    expect(await store.read()).toBeNull();
+  });
 });
 
 describe('signOutAction', () => {

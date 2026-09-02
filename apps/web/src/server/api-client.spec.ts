@@ -129,4 +129,20 @@ describe('createApiClient', () => {
     expect(response.status).toBe(500);
     expect(refreshCalls).toBe(0);
   });
+
+  it('갱신 응답이 200인데 JSON이 아니면 세션을 지운다', async () => {
+    // response.json()이 예외를 던지면 안 된다 — 프록시가 200과 함께 비-JSON 본문을
+    // 돌려주는 경우에도 계약과 다른 응답과 같은 경로(세션 폐기)로 처리한다.
+    addressesReturning(401);
+    server.use(
+      http.post(
+        `${BASE}/auth/refresh`,
+        () => new HttpResponse('<html>not json</html>', { status: 200 }),
+      ),
+    );
+    const store = new InMemoryTokenStore({ accessToken: 'access-1', refreshToken: 'refresh-1' });
+
+    await expect(createApiClient(BASE, store).address.list()).rejects.toThrow(SessionExpiredError);
+    expect(store.clearCalls).toBe(1);
+  });
 });
