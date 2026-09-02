@@ -1469,7 +1469,7 @@ git commit -m "feat: Clock/IdGenerator 포트와 어댑터, 테스트 fake"
 
 **Files:**
 - Create: `docker-compose.yml`, `.env.example`, `apps/api/.env`
-- Create: `apps/api/prisma/schema.prisma`
+- Create: `apps/api/prisma/schema.prisma`, `apps/api/prisma7.config.ts`
 - Create: `apps/api/prisma/migrations/*/migration.sql` (Prisma가 생성)
 - Modify: `apps/api/package.json`, `package.json` (스크립트)
 - Modify: `.gitignore` (`.env`는 이미 무시됨 — 확인만)
@@ -1540,7 +1540,7 @@ Expected: `PostgreSQL 17.x` 출력
 
 - [ ] **Step 3: Prisma 설치와 스키마 작성**
 
-Run: `pnpm --filter @commerce/api add @prisma/client@^7.10.0 && pnpm --filter @commerce/api add -D prisma@^7.10.0`
+Run: `pnpm --filter @commerce/api add @prisma/client@^7.10.0 && pnpm --filter @commerce/api add -D prisma@^7.10.0 dotenv`
 
 **버전을 반드시 고정한다.** npm의 `prisma` CLI는 `latest` dist-tag가 프리릴리스(8.0.0-rc)를 가리키는 반면
 `@prisma/client`의 `latest`는 안정판 7.10.0을 가리킨다 — 두 동반 패키지의 태그가 어긋나 있다.
@@ -1558,7 +1558,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 /// 도메인 이벤트를 애그리거트 저장과 같은 트랜잭션으로 커밋하기 위한 테이블.
@@ -1575,6 +1574,28 @@ model Outbox {
   @@map("outbox")
 }
 ```
+
+**Prisma 7은 `datasource.url`을 스키마 파일에서 완전히 제거했다.** 위 블록에 `url` 줄이
+있으면 `P1012: The datasource property \`url\` is no longer supported in schema files`로 실패한다.
+연결 문자열은 별도 설정 파일로 옮긴다.
+
+`apps/api/prisma7.config.ts`:
+
+```ts
+import 'dotenv/config';
+import { defineConfig } from 'prisma/config';
+
+export default defineConfig({
+  schema: 'prisma/schema.prisma',
+  migrations: { path: 'prisma/migrations' },
+  datasource: { url: process.env['DATABASE_URL'] },
+});
+```
+
+파일명이 `prisma7.config.ts`인 것은 오타가 아니다 — Prisma 7 CLI가 이 이름을 찾는다
+(설치된 `prisma@7.10.0` 패키지 안에서 이 문자열이 확인된다). `dotenv/config` import가 필요한
+이유는 `prisma` CLI에 `--env-file` 플래그가 없어서, 이 파일이 로드될 때 `.env`를
+`process.env`에 올려주지 않으면 `datasource.url`이 비어 실패하기 때문이다.
 
 `apps/api/package.json`의 `scripts`에 추가:
 
