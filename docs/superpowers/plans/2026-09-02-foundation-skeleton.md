@@ -1657,7 +1657,8 @@ Expected: 7개 컬럼과 `outbox_unpublished_idx` 인덱스가 보이고,
 - [ ] **Step 7: 커밋**
 
 ```bash
-git add docker-compose.yml .env.example apps/api/prisma apps/api/package.json package.json pnpm-lock.yaml
+git add docker-compose.yml .env.example apps/api/prisma apps/api/prisma7.config.ts \
+  apps/api/package.json package.json pnpm-workspace.yaml pnpm-lock.yaml
 git commit -m "feat: Docker Postgres와 outbox 테이블 스키마"
 ```
 
