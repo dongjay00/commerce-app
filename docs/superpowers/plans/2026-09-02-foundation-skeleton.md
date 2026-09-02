@@ -25,6 +25,7 @@
 - **테스트 DB는 `TEMPLATE` 복제로 워커별 격리**하고, 파일 간에는 `TRUNCATE ... RESTART IDENTITY CASCADE`로 정리한다. 테스트를 트랜잭션으로 감싸 롤백하는 방식은 금지 — 동시성 경합을 재현할 수 없다.
 - **테스트용 `DATABASE_URL`에는 반드시 `?connection_limit=20`을 붙인다.** 풀이 작으면 경합이 발생하지 않아 동시성 테스트가 거짓 통과한다.
 - **Biome `noRestrictedImports`의 `patterns` 옵션은 Biome v2.2.0 이상**이 필요하다.
+- **Nest가 주입하는 클래스는 값(value) import여야 한다.** Biome의 `useImportType` 자동 수정이 생성자 파라미터 전용 import를 `import type`으로 바꾸면 `design:paramtypes` 메타데이터가 `Object`가 되어 **DI가 조용히 깨진다.** 타입 체크도 린트도 테스트도 통과하고 서버를 실제로 띄웠을 때만 드러난다. 해당 import 위에 `// biome-ignore lint/style/useImportType: ...` 를 이유와 함께 남긴다.
 - 커버리지 임계값: `modules/*/domain/**` lines 95 / branches 90, `modules/*/application/**` lines 90 / branches 85. 어댑터에는 임계값을 걸지 않는다.
 
 ---
@@ -3137,7 +3138,7 @@ git commit -m "feat: contracts 패키지 — 에러 코드, Money DTO, health �
 pnpm --filter @commerce/api add @nestjs/common@^12.0.1 @nestjs/core@^12.0.1 \
   @nestjs/platform-express@^12.0.1 @nestjs/event-emitter@^12.0.0 \
   reflect-metadata@^0.2.2 rxjs@^7.8.2 @commerce/contracts
-pnpm --filter @commerce/api add -D @nestjs/testing@^12.0.1 supertest@^7.2.2 @types/supertest
+pnpm --filter @commerce/api add -D @nestjs/testing@^12.0.1 supertest@^7.2.2 @types/supertest @types/express
 pnpm add -D -w @swc/core@^1.16.1 unplugin-swc@^1.5.11
 ```
 
@@ -3274,6 +3275,7 @@ import type { ErrorDto } from '@commerce/contracts';
 import { type ArgumentsHost, Catch, type ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
 import { DomainError } from '../../kernel/domain-error';
+// biome-ignore lint/style/useImportType: 다른 어댑터의 DI 대상 클래스들과 동일한 값 import 패턴을 유지한다.
 import { DomainErrorRegistry } from './domain-error.registry';
 
 /**
@@ -3333,6 +3335,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
 ```ts
 import { Injectable } from '@nestjs/common';
+// biome-ignore lint/style/useImportType: Nest DI가 design:paramtypes 런타임 값을 요구한다 — type-only면 주입이 깨진다.
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { EventTransport, OutboxRecord } from '../../kernel/ports/event-transport';
 
@@ -3416,6 +3419,7 @@ export class SharedModule {}
 
 ```ts
 import { Controller, Get } from '@nestjs/common';
+// biome-ignore lint/style/useImportType: Nest DI가 design:paramtypes 런타임 값을 요구한다 — type-only면 주입이 깨진다.
 import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('health')
@@ -3470,12 +3474,16 @@ void bootstrap();
 
 ```json
 {
-  "dev": "node --watch -r ts-node/register src/main.ts",
+  "dev": "node --watch -r dotenv/config -r ts-node/register src/main.ts",
   "build": "tsc -p tsconfig.json"
 }
 ```
 
 Run: `pnpm --filter @commerce/api add -D ts-node`
+
+`@swc/core`는 네이티브 빌드 스크립트를 갖는다. `pnpm install`이 `ERR_PNPM_IGNORED_BUILDS`로
+멈추면 `pnpm-workspace.yaml`의 `allowBuilds`에 `'@swc/core': true`를 추가한다 —
+우리가 의도적으로 도입한 컴파일러이므로 정당한 승인이다.
 
 - [ ] **Step 9: 실패하는 예외 필터 통합 테스트 작성**
 
@@ -3598,7 +3606,7 @@ Expected: `{"status":"ok","database":"up"}`
 - [ ] **Step 13: 커밋**
 
 ```bash
-git add apps/api vitest.config.ts package.json pnpm-lock.yaml
+git add apps/api vitest.config.ts package.json pnpm-workspace.yaml pnpm-lock.yaml
 git commit -m "feat: Nest 부트스트랩, 도메인 예외 필터, health 엔드포인트"
 ```
 
