@@ -13,7 +13,7 @@ function requireEnv(name: string): string {
   return value;
 }
 
-function workerDatabaseName(): string {
+export function workerDatabaseName(): string {
   return `commerce_test_w${process.env.VITEST_WORKER_ID ?? '1'}`;
 }
 
