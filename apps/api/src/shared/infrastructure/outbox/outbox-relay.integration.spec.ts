@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { testDb } from '../../../../test/setup/database';
@@ -135,8 +136,17 @@ describe('OutboxRelay', () => {
     expect(poison?.publishedAt).toBeNull();
     expect(healthy?.publishedAt).not.toBeNull();
 
-    // 두 번째 폴링에서도 Poison이 여전히 Healthy를 막지 않는다 (이미 발행됐으니 재선택 안 됨).
-    await expect(relay.relayOnce()).resolves.toBe(0);
+    // 두 번째 폴링에서 새로 들어온 이벤트로 head-of-line blocking을 검증한다.
+    // Healthy는 이미 발행되어 재선택되지 않으므로, `resolves.toBe(0)`만으로는
+    // Poison이 뒤따르는 이벤트를 막지 않는다는 것을 증명하지 못한다 — Poison이
+    // 여전히 백오프 중인 채로 그 뒤에 도착한 Third가 배달되어야 증명된다.
+    await seedEvent('Third', '2026-01-03T00:00:00Z');
+    await expect(relay.relayOnce()).resolves.toBe(1);
+    expect(transport.sent.map((r) => r.eventType)).toEqual(['Healthy', 'Third']);
+
+    const third = await db.outbox.findFirst({ where: { eventType: 'Third' } });
+    expect(third?.publishedAt).not.toBeNull();
+    expect((await db.outbox.findFirst({ where: { eventType: 'Poison' } }))?.publishedAt).toBeNull();
   });
 
   it('전송 실패 시 attempts를 늘리고 last_error를 남긴다', async () => {
@@ -168,10 +178,10 @@ describe('OutboxRelay', () => {
 
   it('재시도 한도(MAX_ATTEMPTS)를 넘긴 행은 데드레터 상태로 더 이상 선택되지 않는다', async () => {
     const id = await seedEvent('Doomed', '2026-01-01T00:00:00Z');
-    // 직접 attempts를 한도까지 올려, 백오프 산수에 결합되지 않고 한도 자체를 검증한다.
+    // 직접 attempts를 한도(10)까지 올려, 백오프 산수에 결합되지 않고 한도 자체를 검증한다.
     await db.outbox.update({
       where: { id },
-      data: { attempts: 5, lastError: '이전 실패 5회' },
+      data: { attempts: 10, lastError: '이전 실패 10회' },
     });
 
     // 시간을 아무리 지나도 (nextAttemptAt이 없으니) 재선택되지 않아야 한다.
@@ -181,6 +191,37 @@ describe('OutboxRelay', () => {
 
     const row = await db.outbox.findUniqueOrThrow({ where: { id } });
     expect(row.publishedAt).toBeNull();
-    expect(row.lastError).toBe('이전 실패 5회');
+    expect(row.lastError).toBe('이전 실패 10회');
+  });
+
+  it('데드레터로 전이하는 실패는 로그를 남기지만, 그 전 재시도들은 남기지 않는다', async () => {
+    const id = await seedEvent('Doomed', '2026-01-01T00:00:00Z');
+    // attempts를 한도 직전(9)까지 올려, 다음 실패 한 번으로 데드레터 전이를 만든다.
+    await db.outbox.update({ where: { id }, data: { attempts: 9 } });
+    transport.failWhen((record) => record.eventType === 'Doomed');
+
+    // 모킹 라이브러리 없이, Logger.prototype.error를 직접 갈아 끼워 호출을 기록한다.
+    const calls: unknown[] = [];
+    const originalError = Logger.prototype.error;
+    Logger.prototype.error = ((message?: unknown) => {
+      calls.push(message);
+    }) as typeof Logger.prototype.error;
+
+    try {
+      await relay.relayOnce();
+      expect(calls).toHaveLength(1);
+      expect(String(calls[0])).toContain(id);
+      expect(String(calls[0])).toContain('Doomed');
+
+      calls.length = 0;
+      // 아직 한도 미만인 일반 실패는 조용해야 한다 — 매 실패마다 로그를 남기면
+      // 신호가 잡음에 묻힌다.
+      await seedEvent('Flaky', '2026-01-02T00:00:00Z');
+      transport.failWhen((record) => record.eventType === 'Flaky');
+      await relay.relayOnce();
+      expect(calls).toHaveLength(0);
+    } finally {
+      Logger.prototype.error = originalError;
+    }
   });
 });
