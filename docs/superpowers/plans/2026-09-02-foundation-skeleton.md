@@ -1688,7 +1688,7 @@ git commit -m "feat: Docker Postgres와 outbox 테이블 스키마"
 
 - [ ] **Step 1: 의존성 설치**
 
-Run: `pnpm add -D -w pg @types/pg dotenv`
+Run: `pnpm add -D -w pg @types/pg dotenv && pnpm --filter @commerce/api add @prisma/adapter-pg@^7.10.0`
 Expected: 루트 `package.json`의 devDependencies에 3개 추가
 
 - [ ] **Step 2: 전역 setup 작성 — 템플릿 DB 생성**
@@ -1749,6 +1749,7 @@ export default async function globalSetup(): Promise<void> {
 `apps/api/test/setup/database.ts`:
 
 ```ts
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { Client } from 'pg';
 import { TEMPLATE_DB } from './global-setup';
@@ -1771,8 +1772,14 @@ function workerDatabaseName(): string {
  * 이 워커 전용 DB에 연결된 Prisma 클라이언트를 반환한다.
  * 없으면 템플릿에서 복제해 만든다 (~100ms).
  *
- * connection_limit=20은 필수다. 풀이 작으면 동시성 테스트의 요청들이 풀에서
- * 직렬화되어 경합이 발생하지 않고 테스트가 거짓으로 통과한다.
+ * 풀 크기 20은 필수다. 풀이 작으면 동시성 테스트의 요청들이 풀에서 직렬화되어
+ * 경합이 발생하지 않고 테스트가 거짓으로 통과한다.
+ *
+ * Prisma 7의 PrismaClient 생성자는 `datasources`/`datasourceUrl`을 더 이상 받지 않는다
+ * (허용 키: errorFormat, adapter, accelerateUrl, log, transactionOptions, omit,
+ *  comments, queryPlanCacheMaxSize, __internal). 런타임에 연결 문자열을 지정하려면
+ * 드라이버 어댑터를 쓴다. 풀 크기도 어댑터(=pg.Pool)의 옵션으로 준다 —
+ * `?connection_limit=`은 Prisma 엔진 파라미터라 pg 드라이버가 무시한다.
  */
 export async function testDb(): Promise<PrismaClient> {
   if (cached) return cached;
@@ -1790,9 +1797,11 @@ export async function testDb(): Promise<PrismaClient> {
   }
   await admin.end();
 
-  cached = new PrismaClient({
-    datasources: { db: { url: `${baseUrl}/${databaseName}?connection_limit=20` } },
+  const adapter = new PrismaPg({
+    connectionString: `${baseUrl}/${databaseName}`,
+    max: 20,
   });
+  cached = new PrismaClient({ adapter });
   await cached.$connect();
   return cached;
 }
@@ -3245,10 +3254,21 @@ Expected: PASS — 4 tests passed
 
 ```ts
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    const connectionString = process.env['DATABASE_URL'];
+    if (!connectionString) {
+      throw new Error('DATABASE_URL이 설정되지 않았습니다.');
+    }
+    // Prisma 7은 스키마에 datasource.url을 두지 않으므로, 런타임 연결은
+    // 반드시 드라이버 어댑터로 공급해야 한다 (Task 6에서 같은 이유로 확인됨).
+    super({ adapter: new PrismaPg({ connectionString }) });
+  }
+
   async onModuleInit(): Promise<void> {
     await this.$connect();
   }
