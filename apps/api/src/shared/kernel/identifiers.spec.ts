@@ -4,12 +4,14 @@ import {
   AccountId,
   AddressId,
   CartId,
+  CorruptedRecordError,
   CustomerId,
   InvalidIdError,
   OrderId,
   PaymentId,
   ProductId,
   ReservationId,
+  SessionId,
   SkuId,
 } from './identifiers';
 
@@ -71,5 +73,42 @@ describe('식별자', () => {
       _paymentId,
       _addressId,
     ];
+  });
+});
+
+const VALID = '018f2b1c-4a5d-7e6f-8a9b-0c1d2e3f4a5b';
+const BROKEN = 'not-a-uuid';
+
+// vitest 3.2.7의 toThrow 타입(Constructable = new (...args: any[]) => any)은 concrete
+// 생성자만 받는다. DomainError는 abstract라 그대로 넘기면 "abstract 생성자 타입을
+// non-abstract 생성자 타입에 대입할 수 없다"는 tsc 오류가 난다. 런타임 동작(instanceof
+// 검사)은 abstract 여부와 무관하므로, 타입 단계에서만 unknown을 거쳐 우회한다.
+const DomainErrorConstructor = DomainError as unknown as new (...args: never[]) => Error;
+
+describe('경로별 실패 분류', () => {
+  it('인바운드 경로(of)의 실패는 DomainError다 — 사용자가 고칠 수 있는 입력이다', () => {
+    expect(() => AccountId.of(BROKEN)).toThrow(InvalidIdError);
+    // DomainError 하위 클래스여야 예외 필터가 400으로 옮긴다.
+    expect(() => AccountId.of(BROKEN)).toThrow(DomainErrorConstructor);
+  });
+
+  it('영속 복원 경로(fromPersistence)의 실패는 DomainError가 아니다 — 저장된 데이터가 깨진 것이다', () => {
+    expect(() => AccountId.fromPersistence(BROKEN)).toThrow(CorruptedRecordError);
+    // 여기가 이 테스트의 핵심이다. DomainError였다면 예외 필터가 400을 내보내
+    // "당신의 요청이 잘못됐다"고 거짓말한다. 실제로는 우리 DB가 깨진 것이므로 500이 맞다.
+    expect(() => AccountId.fromPersistence(BROKEN)).not.toThrow(DomainErrorConstructor);
+  });
+
+  it('두 경로 모두 정상 UUID는 통과시키고 값을 보존한다', () => {
+    expect(AccountId.of(VALID)).toBe(VALID);
+    expect(AccountId.fromPersistence(VALID)).toBe(VALID);
+  });
+
+  it('SessionId가 존재하고 다른 식별자와 섞이지 않는다', () => {
+    const session: SessionId = SessionId.of(VALID);
+    const customer: CustomerId = CustomerId.of(VALID);
+    // @ts-expect-error SessionId는 CustomerId에 대입할 수 없다 (branded type).
+    const wrong: CustomerId = session;
+    expect(wrong).toBe(customer);
   });
 });
