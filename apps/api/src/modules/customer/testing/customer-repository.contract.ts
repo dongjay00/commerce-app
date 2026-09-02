@@ -150,6 +150,27 @@ export function customerRepositoryContract(
       expect(reloaded?.addressBook.all).toHaveLength(1);
     });
 
+    it('마지막 주소를 지우고 다시 저장하면 주소록이 완전히 비워진다', async () => {
+      // 위 케이스("삭제된 주소는 다시 저장해도 되살아나지 않는다")는 언제나 주소 하나를
+      // 남기므로 두 번째 저장의 rows가 절대 비지 않는다. `저장 후 원본을 변경해도
+      // 저장본은 바뀌지 않는다`도 첫 저장 시점에 이미 저장된 행이 하나도 없으므로,
+      // `deleteMany({ notIn: [] })`가 "전부 삭제"든 "아무것도 안 함"이든 결과가
+      // 똑같다. 이 케이스만 "이미 저장된 행이 있는 상태에서 rows가 빈 배열이 되는"
+      // 유일한 경로를 지나가고, 그것이 어댑터의 `notIn: []` 처리를 실제로 가른다.
+      const repo = await createRepo();
+      const customer = aCustomer('000b');
+      const addressId = AddressId.of('018f2b1c-4a5d-7e6f-8a9b-0c1daddc0001');
+      customer.addAddress(addressId, details('집'));
+      await repo.save(customer);
+
+      const loaded = await repo.findById(customer.id);
+      loaded?.removeAddress(addressId);
+      if (loaded) await repo.save(loaded);
+
+      const reloaded = await repo.findById(customer.id);
+      expect(reloaded?.addressBook.all).toEqual([]);
+    });
+
     it('저장 후 원본을 변경해도 저장본은 바뀌지 않는다', async () => {
       const repo = await createRepo();
       const customer = aCustomer('0008');
