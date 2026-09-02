@@ -44,4 +44,20 @@ describe('Argon2PasswordHasher', () => {
     const hasher = new Argon2PasswordHasher();
     await expect(hasher.verify(Credential.fromHash('not-a-hash'), PASSWORD)).resolves.toBe(false);
   });
+
+  it('무관한 오류는 삼키지 않고 그대로 전파한다', async () => {
+    // catch가 감싸는 범위는 @node-rs/argon2의 verify(...) 호출 하나뿐이어야 한다.
+    // credential.hash나 password.reveal() 자체가 던지는 건 망가진 해시가 아니라
+    // 코드 버그이고, 여기서도 false로 뭉개면 "왜 이 사용자는 로그인이 안 되는가"를
+    // 조사할 단서가 사라진다.
+    const hasher = new Argon2PasswordHasher();
+    const credential = await hasher.hash(PASSWORD);
+    const brokenPassword = {
+      reveal(): string {
+        throw new Error('예상치 못한 오류');
+      },
+    } as unknown as PlainPassword;
+
+    await expect(hasher.verify(credential, brokenPassword)).rejects.toThrow('예상치 못한 오류');
+  });
 });

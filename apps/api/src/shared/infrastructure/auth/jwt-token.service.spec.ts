@@ -15,6 +15,22 @@ function service(ttl = 900): JwtTokenService {
   return new JwtTokenService({ secret: SECRET, accessTokenTtlSeconds: ttl });
 }
 
+/**
+ * `jsonwebtoken`은 `sign()`으로 `alg: 'none'` 토큰을 만들지 못하게 막는다(비밀키가
+ * 있으면 거부한다). 그래서 이 케이스는 라이브러리를 거치지 않고 base64url 조각을
+ * 손으로 이어붙인다 — 서명 검증 자체가 없는 토큰을 흉내내야 하기 때문이다.
+ */
+function buildNoneAlgToken(subject: string, claims: Record<string, unknown>): string {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const header = encode({ alg: 'none', typ: 'JWT' });
+  const payload = encode({
+    sub: subject,
+    exp: Math.floor(Date.now() / 1000) + 900,
+    ...claims,
+  });
+  return `${header}.${payload}.`;
+}
+
 describe('JwtTokenService', () => {
   it('발급한 토큰을 스스로 검증해 같은 principal을 되돌린다', async () => {
     // 발급과 검증이 한 클래스에 있는 이유가 이 테스트다. 두 클래스로 갈리면 비밀키나
@@ -58,6 +74,19 @@ describe('JwtTokenService', () => {
     });
 
     await expect(service().verify(hs512)).rejects.toThrow(UnauthenticatedError);
+  });
+
+  it('alg가 none인 토큰을 거부한다', async () => {
+    // 참고: 이 케이스는 `{ algorithms: [ALGORITHM] }`을 지웠을 때도 여전히 통과한다
+    // (직접 확인함) — jsonwebtoken은 문자열 비밀키가 주어지면 options.algorithms를
+    // 아예 안 넘겨도 'none'을 기본으로 거부한다("jwt signature is required").
+    // 그 옵션이 실제로 걸려 있는지 가르는 건 바로 위 HS512 케이스다: 옵션을 지우면
+    // jsonwebtoken의 기본 허용 목록이 HS256/HS384/HS512 전체로 넓어져 HS512 토큰이
+    // 통과해 버린다. 이 테스트는 그와 별개로 alg:none 위조를 방어 심층으로
+    // 명시적으로 고정해 둔다 — 라이브러리의 기본 동작에만 기대지 않는다는 뜻이다.
+    const none = buildNoneAlgToken(PRINCIPAL.accountId, { cid: PRINCIPAL.customerId });
+
+    await expect(service().verify(none)).rejects.toThrow(UnauthenticatedError);
   });
 
   it('sub가 UUID가 아니면 400이 아니라 401이다', async () => {

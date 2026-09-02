@@ -16,8 +16,13 @@ export class Argon2PasswordHasher implements PasswordHasher {
   }
 
   async verify(credential: Credential, password: PlainPassword): Promise<boolean> {
+    // 인자 평가는 try 밖에서 한다 — 여기서 던지는 건 망가진 해시가 아니라 코드
+    // 버그이고, 삼켜버리면 "왜 이 사용자는 로그인이 안 되는가"를 조사할 단서가
+    // 사라진다.
+    const storedHash = credential.hash;
+    const plainPassword = password.reveal();
     try {
-      return await verify(credential.hash, password.reveal());
+      return await verify(storedHash, plainPassword);
     } catch {
       // 저장된 해시가 망가졌다. 던지면 그 계정의 로그인이 영구히 500이 된다.
       return false;
