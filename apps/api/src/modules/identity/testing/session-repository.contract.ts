@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Duration } from '../../../shared/kernel/duration';
 import { AccountId, SessionId } from '../../../shared/kernel/identifiers';
+import type { TransactionContext } from '../../../shared/kernel/ports/transaction-manager';
 import type { SessionRepository } from '../application/ports/out/session.repository';
 import { Session } from '../domain/session';
 
@@ -17,9 +18,15 @@ function aSession(suffix: string, accountSuffix: string, hash: string): Session 
   });
 }
 
+/**
+ * `runInTransaction`은 실물 트랜잭션 매니저가 있을 때만 넘긴다. in-memory 호출부는
+ * 이걸 생략한다 — `PassthroughTransactionManager`는 롤백을 흉내내지 않으므로, 거기서
+ * 롤백 테스트를 돌리면 통과하는 무의미한 테스트가 되고, 그건 테스트가 없는 것보다 나쁘다.
+ */
 export function sessionRepositoryContract(
   name: string,
   createRepo: () => Promise<SessionRepository>,
+  runInTransaction?: <T>(work: (tx: TransactionContext) => Promise<T>) => Promise<T>,
 ): void {
   describe(`SessionRepository 계약 — ${name}`, () => {
     it('저장한 세션을 리프레시 토큰 해시로 찾는다', async () => {
@@ -30,6 +37,10 @@ export function sessionRepositoryContract(
       const found = await repo.findByRefreshTokenHash('hash-a');
       expect(found?.id).toBe(session.id);
       expect(found?.accountId).toBe(session.accountId);
+      // 한 번도 회전하지 않은 세션은 rotatedAt이 null이어야 한다. 이 스위트의 다른
+      // 테스트는 전부 rotate()를 먼저 부르고서 rotatedAt을 읽으므로, 매퍼가 이 컬럼을
+      // null이 아닌 값으로 기본값 처리해도 여기 말고는 잡히지 않는다.
+      expect(found?.rotatedAt).toBeNull();
     });
 
     it('없는 해시는 null을 반환한다', async () => {
@@ -120,5 +131,27 @@ export function sessionRepositoryContract(
 
       expect((await repo.findByRefreshTokenHash('hash-g'))?.revokedAt).toBeNull();
     });
+
+    it.skipIf(runInTransaction === undefined)(
+      '트랜잭션이 롤백되면 그 안에서 저장한 세션도 사라진다',
+      async () => {
+        const runner = runInTransaction;
+        if (!runner) {
+          // skipIf가 이미 이 케이스를 건너뛴다 — 타입만 좁힌다.
+          return;
+        }
+        const repo = await createRepo();
+        const session = aSession('1010', '2005', 'hash-h');
+
+        await expect(
+          runner(async (tx) => {
+            await repo.save(session, tx);
+            throw new Error('의도된 실패');
+          }),
+        ).rejects.toThrow('의도된 실패');
+
+        expect(await repo.findByRefreshTokenHash('hash-h')).toBeNull();
+      },
+    );
   });
 }

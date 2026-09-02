@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AccountId } from '../../../shared/kernel/identifiers';
+import type { TransactionContext } from '../../../shared/kernel/ports/transaction-manager';
 import type { AccountRepository } from '../application/ports/out/account.repository';
 import { Account } from '../domain/account';
 import { EmailAlreadyRegisteredError } from '../domain/account.errors';
@@ -20,10 +21,15 @@ function anAccount(idSuffix: string, email: string): Account {
 /**
  * AccountRepository의 계약. in-memory fake와 Prisma 어댑터 양쪽이 통과해야 한다.
  * `createRepo`는 매 테스트마다 **비어 있는** 리포지토리를 돌려줘야 한다.
+ *
+ * `runInTransaction`은 실물 트랜잭션 매니저가 있을 때만 넘긴다. in-memory 호출부는
+ * 이걸 생략한다 — `PassthroughTransactionManager`는 롤백을 흉내내지 않으므로, 거기서
+ * 롤백 테스트를 돌리면 통과하는 무의미한 테스트가 되고, 그건 테스트가 없는 것보다 나쁘다.
  */
 export function accountRepositoryContract(
   name: string,
   createRepo: () => Promise<AccountRepository>,
+  runInTransaction?: <T>(work: (tx: TransactionContext) => Promise<T>) => Promise<T>,
 ): void {
   describe(`AccountRepository 계약 — ${name}`, () => {
     it('저장한 계정을 ID로 찾는다', async () => {
@@ -124,5 +130,31 @@ export function accountRepositoryContract(
       const loaded = await repo.findById(account.id);
       expect(loaded?.credential.hash).toBe('$argon2id$0009');
     });
+
+    it.skipIf(runInTransaction === undefined)(
+      '트랜잭션이 롤백되면 그 안에서 저장한 계정도 사라진다',
+      async () => {
+        // tx를 무시하고 항상 기본 클라이언트로 쓰는 어댑터는 이 테스트 없이도
+        // 위의 모든 케이스를 통과한다 — 자기가 방금 쓴 걸 트랜잭션 밖에서 그대로
+        // 읽어올 뿐이기 때문이다. 스펙 §6.3이 막으려는 실패(애그리거트는 커밋됐는데
+        // 이벤트는 유실되는 것, 또는 그 반대)가 정확히 이 경로에서 생긴다.
+        const runner = runInTransaction;
+        if (!runner) {
+          // skipIf가 이미 이 케이스를 건너뛴다 — 타입만 좁힌다.
+          return;
+        }
+        const repo = await createRepo();
+        const account = anAccount('0010', 'g@example.com');
+
+        await expect(
+          runner(async (tx) => {
+            await repo.save(account, tx);
+            throw new Error('의도된 실패');
+          }),
+        ).rejects.toThrow('의도된 실패');
+
+        expect(await repo.findById(account.id)).toBeNull();
+      },
+    );
   });
 }
