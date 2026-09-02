@@ -11,6 +11,7 @@
   "dependencies": {
     "@commerce/contracts": "workspace:*",
     "@ts-rest/core": "^3.52.1",
+    "iron-session": "^9.0.1",
     "next": "^16.3.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
