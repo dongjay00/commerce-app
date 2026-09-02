@@ -3134,14 +3134,20 @@ git commit -m "feat: contracts 패키지 — 에러 코드, Money DTO, health �
 - [ ] **Step 1: Nest와 테스트 도구 설치**
 
 ```bash
-pnpm --filter @commerce/api add @nestjs/common @nestjs/core @nestjs/platform-express \
-  @nestjs/event-emitter reflect-metadata rxjs @commerce/contracts
-pnpm --filter @commerce/api add -D @nestjs/testing supertest @types/supertest
-pnpm add -D -w @swc/core unplugin-swc
+pnpm --filter @commerce/api add @nestjs/common@^12.0.1 @nestjs/core@^12.0.1 \
+  @nestjs/platform-express@^12.0.1 @nestjs/event-emitter@^12.0.0 \
+  reflect-metadata@^0.2.2 rxjs@^7.8.2 @commerce/contracts
+pnpm --filter @commerce/api add -D @nestjs/testing@^12.0.1 supertest@^7.2.2 @types/supertest
+pnpm add -D -w @swc/core@^1.16.1 unplugin-swc@^1.5.11
 ```
 
 `@commerce/contracts`는 워크스페이스 프로토콜로 들어가야 한다. `apps/api/package.json`의
 dependencies가 `"@commerce/contracts": "workspace:*"`인지 확인한다.
+
+**Nest 12는 비교적 최근 메이저다.** 이 계획의 Nest 코드(`@Catch`, `ExceptionFilter`,
+`ArgumentsHost`, `EventEmitterModule.forRoot()`, `NestFactory.create`)는 그보다 앞선
+관용구로 작성됐다. 시그니처나 import 경로가 바뀌었을 수 있으니 **가정하지 말고 확인할 것** —
+어긋나면 임의로 우회하지 말고 멈추고 보고한다. Prisma 7이 같은 방식으로 세 번 막았다.
 
 - [ ] **Step 2: vitest에 swc 플러그인 추가**
 
@@ -3668,9 +3674,10 @@ MSW 핸들러가 `@commerce/contracts` 스키마로 응답을 검증하게 해�
 파일을 만든 뒤 의존성을 설치한다.
 
 ```bash
-pnpm --filter @commerce/web add next react react-dom @ts-rest/core @commerce/contracts server-only
+pnpm --filter @commerce/web add next@^16.3.4 react@^19.2.8 react-dom@^19.2.8 \
+  @ts-rest/core@^3.52.1 @commerce/contracts server-only
 pnpm --filter @commerce/web add -D @types/react @types/react-dom @types/node typescript vitest
-pnpm add -D -w @testing-library/react @testing-library/jest-dom jsdom msw
+pnpm add -D -w @testing-library/react@^16.3.3 @testing-library/jest-dom jsdom@^30.0.1 msw@^2.15.0
 ```
 
 `apps/web/next.config.ts`:
@@ -3948,7 +3955,7 @@ git commit -m "feat: Next 앱과 BFF 골격, FSD 레이어, MSW 계약 검증"
 
 - [ ] **Step 1: dependency-cruiser 설치와 설정 작성**
 
-Run: `pnpm add -D -w dependency-cruiser`
+Run: `pnpm add -D -w dependency-cruiser@^18.2.0`
 
 `.dependency-cruiser.js`:
 
