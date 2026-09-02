@@ -9,5 +9,47 @@
     "lineWidth": 100
   },
   "linter": { "enabled": true, "rules": { "recommended": true } },
-  "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always" } }
+  "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always" } },
+  "overrides": [
+    {
+      "includes": ["apps/api/src/shared/kernel/**", "apps/api/src/modules/*/domain/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@nestjs/*", "@prisma/client", "@commerce/contracts"],
+                    "message": "도메인과 커널은 프레임워크·ORM·DTO를 알 수 없습니다."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/api/src/modules/*/application/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@prisma/client", "**/adapters/**"],
+                    "message": "application은 포트 인터페이스만 압니다. 구현은 모릅니다."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
