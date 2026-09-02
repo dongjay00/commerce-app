@@ -4067,7 +4067,10 @@ module.exports = {
       severity: 'error',
       from: { path: 'apps/api/src/modules/[^/]+/domain' },
       to: {
-        path: '(node_modules/@nestjs|node_modules/@prisma|/application/|/adapters/)',
+        // shared/infrastructure를 반드시 포함할 것. 없으면 도메인이 '@prisma/client'라는
+        // 이름을 한 번도 쓰지 않고 shared/infrastructure/prisma/prisma.service를 통해
+        // ORM에 도달할 수 있다. kernel-is-pure는 이미 이 경로를 막고 있다.
+        path: '(node_modules/@nestjs|node_modules/@prisma|apps/api/src/shared/infrastructure|/application/|/adapters/)',
       },
     },
     {
@@ -4082,14 +4085,16 @@ module.exports = {
       comment: '애플리케이션은 포트 인터페이스만 안다',
       severity: 'error',
       from: { path: 'apps/api/src/modules/[^/]+/application' },
-      to: { path: '(/adapters/|node_modules/@prisma)' },
+      to: { path: '(/adapters/|node_modules/@prisma|apps/api/src/shared/infrastructure)' },
     },
     {
       name: 'no-cross-module-internals',
       comment: '모듈 간 참조는 공개 API(index.ts)로만',
       severity: 'error',
       from: { path: 'apps/api/src/modules/([^/]+)/' },
-      to: { path: 'apps/api/src/modules/(?!$1)[^/]+/(domain|application|adapters)' },
+      // (?!$1/) 의 슬래시가 필수다 — 없으면 `order` 모듈이 `orders` 모듈 내부를
+      // import해도 접두사가 일치해 통과한다.
+      to: { path: 'apps/api/src/modules/(?!$1/)[^/]+/(domain|application|adapters)' },
     },
     {
       name: 'no-test-doubles-in-production',
@@ -4119,16 +4124,23 @@ module.exports = {
       to: { path: 'apps/web/src/(widgets|views)' },
     },
     {
+      name: 'fsd-widgets-layer-direction',
+      severity: 'error',
+      from: { path: 'apps/web/src/widgets' },
+      to: { path: 'apps/web/src/views' },
+    },
+    {
+      // $1 = 레이어, $2 = 슬라이스. features뿐 아니라 슬라이스를 갖는 네 레이어를 모두 덮는다.
       name: 'fsd-no-cross-slice-internals',
       severity: 'error',
-      from: { path: 'apps/web/src/features/([^/]+)/' },
-      to: { path: 'apps/web/src/features/(?!$1)[^/]+/(ui|model|api)' },
+      from: { path: 'apps/web/src/(entities|features|widgets|views)/([^/]+)/' },
+      to: { path: 'apps/web/src/$1/(?!$2/)[^/]+/(ui|model|api)' },
     },
     {
       name: 'no-server-code-in-fsd',
       comment: 'BFF 전용 코드(토큰·세션)가 FSD 레이어로 새면 안 된다',
       severity: 'error',
-      from: { path: 'apps/web/src/(entities|features|widgets|shared)' },
+      from: { path: 'apps/web/src/(entities|features|widgets|views|shared)' },
       to: { path: 'apps/web/src/server' },
     },
 
@@ -4144,6 +4156,15 @@ module.exports = {
       severity: 'error',
       from: { path: '^packages/contracts' },
       to: { path: '^apps/' },
+    },
+    {
+      // 해석되지 않은 import는 그래프에 엣지를 만들지 않아 위의 모든 금지 규칙을
+      // 조용히 빠져나간다 — node_modules를 exclude에 넣었을 때와 같은 무력화다.
+      // 이 규칙이 그 구멍을 소리 나게 만든다.
+      name: 'not-to-unresolvable',
+      severity: 'error',
+      from: {},
+      to: { couldNotResolve: true },
     },
     {
       name: 'no-circular',
