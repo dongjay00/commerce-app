@@ -2882,8 +2882,17 @@ git commit -m "feat: OutboxRelay와 EventTransport 포트"
 }
 ```
 
-Run: `pnpm --filter @commerce/contracts add zod @ts-rest/core`
-Expected: zod 3.x 이상과 `@ts-rest/core` 설치
+Run: `pnpm --filter @commerce/contracts add zod@^3.25.76 @ts-rest/core@^3.52.1`
+
+**두 버전을 모두 고정한다.** npm의 `zod` `latest`는 4.x이지만 `@ts-rest/core`의 모든 안정 릴리스가
+`peerDependencies: { zod: "^3.22.3" }`을 선언한다 — zod 4를 지원하는 ts-rest 안정 버전은 없다.
+고정하지 않으면 선언되지 않은 조합 위에 계획 2~5의 엔드포인트 약 30개를 쌓게 된다.
+zod 4는 오류 내부 구조(`.issues`, `flatten()`)를 바꿨는데 그 지점이 바로 ts-rest의
+검증 파이프와 응답 파싱이 건드리는 표면이다.
+
+`3.25.76`을 고르는 이유는 이 버전이 `zod/v4` 서브패스를 함께 제공하기 때문이다 —
+ts-rest가 zod 4를 지원하면 메인 엔트리만 올리면 되고, 그전에도 필요하면
+`import { z } from 'zod/v4'`로 개별 이관이 가능하다. 막다른 길이 아니다.
 
 - [ ] **Step 2: 실패하는 ErrorCode 테스트 작성**
 
