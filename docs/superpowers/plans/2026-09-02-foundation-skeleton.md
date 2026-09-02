@@ -1974,7 +1974,7 @@ Expected: PASS — 6 tests passed.
 - [ ] **Step 8: 커밋**
 
 ```bash
-git add apps/api/test vitest.config.ts package.json pnpm-lock.yaml
+git add apps/api/test apps/api/package.json vitest.config.ts package.json pnpm-lock.yaml
 git commit -m "test: TEMPLATE 복제 기반 테스트 DB 격리 인프라"
 ```
 
