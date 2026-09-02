@@ -49,7 +49,7 @@ describe('테스트 DB 격리', () => {
     await expect(db.outbox.count()).resolves.toBe(0);
   });
 
-  it('풀이 20이라 18개의 동시 요청이 18개의 서로 다른 백엔드를 쓴다', async () => {
+  it('동시 요청 18개가 최소 15개의 서로 다른 백엔드를 쓴다 — 풀이 15 미만으로 줄면 실패한다', async () => {
     const db = await testDb();
     // Promise.all(N개) 성공 개수만 세면 풀 크기가 1이어도 그냥 순차 대기 후 전부
     // 성공하므로 풀 크기를 구분하지 못한다 — 애초에 이 테스트가 고치려던 결함이다.
