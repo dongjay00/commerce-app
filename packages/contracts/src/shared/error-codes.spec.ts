@@ -37,3 +37,19 @@ describe('errorDtoSchema', () => {
     expect(() => errorDtoSchema.parse({ code: ErrorCode.NOT_FOUND })).toThrow();
   });
 });
+
+describe('인증·회원 도메인 에러 코드', () => {
+  it('세 코드가 존재하고 값이 이름과 같다', () => {
+    expect(ErrorCode.EMAIL_ALREADY_REGISTERED).toBe('EMAIL_ALREADY_REGISTERED');
+    expect(ErrorCode.INVALID_CREDENTIALS).toBe('INVALID_CREDENTIALS');
+    expect(ErrorCode.PASSWORD_POLICY_VIOLATED).toBe('PASSWORD_POLICY_VIOLATED');
+  });
+
+  it('errorDtoSchema가 새 코드를 받아들인다', () => {
+    const parsed = errorDtoSchema.parse({
+      code: 'INVALID_CREDENTIALS',
+      message: '이메일 또는 비밀번호가 올바르지 않습니다.',
+    });
+    expect(parsed.code).toBe(ErrorCode.INVALID_CREDENTIALS);
+  });
+});

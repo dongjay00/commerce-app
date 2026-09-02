@@ -8,10 +8,12 @@ export const healthContract = c.router({
     method: 'GET',
     path: '/health',
     responses: {
-      200: z.object({
-        status: z.literal('ok'),
-        database: z.enum(['up', 'down']),
-      }),
+      200: z
+        .object({
+          status: z.literal('ok'),
+          database: z.enum(['up', 'down']),
+        })
+        .strict(),
     },
     summary: 'API와 데이터베이스 연결 상태',
   },

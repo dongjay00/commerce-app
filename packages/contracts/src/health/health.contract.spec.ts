@@ -26,4 +26,10 @@ describe('healthContract', () => {
       healthContract.check.responses[200].parse({ status: 'ok', database: 'maybe' }),
     ).toThrow();
   });
+
+  it('계약에 없는 필드를 거부한다', () => {
+    expect(() =>
+      healthContract.check.responses[200].parse({ status: 'ok', database: 'up', uptime: 123 }),
+    ).toThrow();
+  });
 });
