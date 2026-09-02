@@ -1,0 +1,136 @@
+import { describe, expect, it } from 'vitest';
+import { AccountId, AddressId, CustomerId } from '../../../shared/kernel/identifiers';
+import type { CustomerRepository } from '../application/ports/out/customer.repository';
+import { AddressDetails } from '../domain/address-details';
+import { Customer } from '../domain/customer';
+
+const NOW = new Date('2026-03-01T10:00:00.000Z');
+
+function details(label: string): AddressDetails {
+  return AddressDetails.of({
+    label,
+    recipient: '홍길동',
+    phone: '010-1234-5678',
+    zip: '06236',
+    line1: '서울시 강남구 테헤란로 1',
+    line2: label === '집' ? '101동' : null,
+  });
+}
+
+function aCustomer(suffix: string): Customer {
+  return Customer.register({
+    id: CustomerId.of(`018f2b1c-4a5d-7e6f-8a9b-0c1dc05e${suffix}`),
+    accountId: AccountId.of(`018f2b1c-4a5d-7e6f-8a9b-0c1dacc0${suffix}`),
+    now: NOW,
+  });
+}
+
+/**
+ * CustomerRepository의 계약. in-memory fake와 Prisma 어댑터 양쪽이 통과해야 한다.
+ * `createRepo`는 매 테스트마다 **비어 있는** 리포지토리를 돌려줘야 한다.
+ */
+export function customerRepositoryContract(
+  name: string,
+  createRepo: () => Promise<CustomerRepository>,
+): void {
+  describe(`CustomerRepository 계약 — ${name}`, () => {
+    it('저장한 고객을 ID로 찾는다', async () => {
+      const repo = await createRepo();
+      const customer = aCustomer('0001');
+      await repo.save(customer);
+      expect((await repo.findById(customer.id))?.accountId).toBe(customer.accountId);
+    });
+
+    it('계정 ID로도 찾는다', async () => {
+      const repo = await createRepo();
+      const customer = aCustomer('0002');
+      await repo.save(customer);
+      expect((await repo.findByAccountId(customer.accountId))?.id).toBe(customer.id);
+    });
+
+    it('없는 ID는 null을 반환한다', async () => {
+      const repo = await createRepo();
+      expect(await repo.findById(CustomerId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dc05e9999'))).toBeNull();
+      expect(
+        await repo.findByAccountId(AccountId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dacc09999')),
+      ).toBeNull();
+    });
+
+    it('주소록이 애그리거트와 함께 저장되고 복원된다', async () => {
+      // SavedAddress는 애그리거트 안이다. 따로 저장할 방법이 없어야 한다.
+      const repo = await createRepo();
+      const customer = aCustomer('0003');
+      customer.addAddress(AddressId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dadd10001'), details('집'));
+      customer.addAddress(AddressId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dadd10002'), details('회사'));
+      await repo.save(customer);
+
+      const loaded = await repo.findById(customer.id);
+      expect(loaded?.addressBook.all).toHaveLength(2);
+    });
+
+    it('주소의 모든 필드가 왕복해도 보존된다', async () => {
+      const repo = await createRepo();
+      const customer = aCustomer('0004');
+      const addressId = AddressId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dadd20001');
+      customer.addAddress(addressId, details('집'));
+      await repo.save(customer);
+
+      const loaded = await repo.findById(customer.id);
+      const saved = loaded?.addressBook.all.find((a) => a.id === addressId);
+      expect(saved?.details.equals(details('집'))).toBe(true);
+    });
+
+    it('line2가 null인 주소도 그대로 보존된다', async () => {
+      // ''로 저장되면 도메인의 정규화(빈 문자열 → null)와 어긋나 equals가 깨진다.
+      const repo = await createRepo();
+      const customer = aCustomer('0005');
+      const addressId = AddressId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dadd30001');
+      customer.addAddress(addressId, details('회사'));
+      await repo.save(customer);
+
+      const loaded = await repo.findById(customer.id);
+      expect(loaded?.addressBook.all.find((a) => a.id === addressId)?.details.line2).toBeNull();
+    });
+
+    it('기본 배송지 표시가 왕복해도 보존된다', async () => {
+      const repo = await createRepo();
+      const customer = aCustomer('0006');
+      const first = AddressId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dadd40001');
+      const second = AddressId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dadd40002');
+      customer.addAddress(first, details('집'));
+      customer.addAddress(second, details('회사'));
+      customer.setDefaultAddress(second);
+      await repo.save(customer);
+
+      expect((await repo.findById(customer.id))?.addressBook.defaultAddress?.id).toBe(second);
+    });
+
+    it('삭제된 주소는 다시 저장해도 되살아나지 않는다', async () => {
+      // 어댑터가 upsert만 하고 삭제를 하지 않으면, 지운 주소가 다음 조회에서 되돌아온다.
+      const repo = await createRepo();
+      const customer = aCustomer('0007');
+      const addressId = AddressId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dadd50001');
+      customer.addAddress(addressId, details('집'));
+      customer.addAddress(AddressId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dadd50002'), details('회사'));
+      await repo.save(customer);
+
+      const loaded = await repo.findById(customer.id);
+      loaded?.removeAddress(addressId);
+      if (loaded) await repo.save(loaded);
+
+      const reloaded = await repo.findById(customer.id);
+      expect(reloaded?.addressBook.all.map((a) => a.id)).not.toContain(addressId);
+      expect(reloaded?.addressBook.all).toHaveLength(1);
+    });
+
+    it('저장 후 원본을 변경해도 저장본은 바뀌지 않는다', async () => {
+      const repo = await createRepo();
+      const customer = aCustomer('0008');
+      await repo.save(customer);
+
+      customer.addAddress(AddressId.of('018f2b1c-4a5d-7e6f-8a9b-0c1dadd60001'), details('집'));
+
+      expect((await repo.findById(customer.id))?.addressBook.all).toEqual([]);
+    });
+  });
+}
