@@ -36,6 +36,14 @@ export default defineConfig({
           hookTimeout: 60_000,
         },
       },
+      {
+        test: {
+          name: 'web',
+          include: ['apps/web/src/**/*.spec.{ts,tsx}'],
+          environment: 'jsdom',
+          setupFiles: ['./apps/web/test/setup.ts'],
+        },
+      },
     ],
     coverage: {
       thresholds: {
