@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DomainEvent } from '../kernel/domain-event';
+import type { TransactionContext } from '../kernel/ports/transaction-manager';
 import { RecordingEventPublisher } from './recording-event-publisher';
 
 function event(type: string): DomainEvent {
@@ -43,5 +44,35 @@ describe('RecordingEventPublisher', () => {
     const publisher = new RecordingEventPublisher();
     await publisher.publish([]);
     expect(publisher.published).toEqual([]);
+  });
+
+  it('tx 없이 부르면 publishCalls에 undefined로 남는다', async () => {
+    const publisher = new RecordingEventPublisher();
+    await publisher.publish([event('OrderPlaced')]);
+    expect(publisher.publishCalls).toHaveLength(1);
+    expect(publisher.publishCalls[0]?.tx).toBeUndefined();
+  });
+
+  it('tx와 함께 부르면 그 값이 남는다', async () => {
+    const publisher = new RecordingEventPublisher();
+    const tx = {} as TransactionContext;
+    await publisher.publish([event('OrderPlaced')], tx);
+    expect(publisher.publishCalls[0]?.tx).toBe(tx);
+  });
+
+  it('clear()가 publishCalls도 비운다', async () => {
+    const publisher = new RecordingEventPublisher();
+    await publisher.publish([event('OrderPlaced')]);
+    publisher.clear();
+    expect(publisher.publishCalls).toEqual([]);
+  });
+
+  it('publishCalls는 인자로 받은 배열을 복사해 담는다', async () => {
+    // 호출자가 배열을 재사용하면(pullEvents 뒤 재사용 등) 기록이 뒤바뀐다.
+    const publisher = new RecordingEventPublisher();
+    const events = [event('OrderPlaced')];
+    await publisher.publish(events);
+    events.length = 0;
+    expect(publisher.publishCalls[0]?.events).toHaveLength(1);
   });
 });
