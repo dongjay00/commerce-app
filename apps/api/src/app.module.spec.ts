@@ -1,14 +1,20 @@
+import { ErrorCode } from '@commerce/contracts';
+import { ApplicationConfig } from '@nestjs/core';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from './app.module';
+import { DomainErrorRegistry } from './shared/infrastructure/http/domain-error.registry';
+import { DomainExceptionFilter } from './shared/infrastructure/http/domain-exception.filter';
 import { HealthController } from './shared/infrastructure/http/health.controller';
 import { OutboxRelay } from './shared/infrastructure/outbox/outbox-relay';
 import { PrismaService } from './shared/infrastructure/prisma/prisma.service';
+import { InvalidIdError } from './shared/kernel/identifiers';
 import { CLOCK } from './shared/kernel/ports/clock';
 import { DOMAIN_EVENT_PUBLISHER } from './shared/kernel/ports/domain-event.publisher';
 import { EVENT_TRANSPORT } from './shared/kernel/ports/event-transport';
 import { ID_GENERATOR } from './shared/kernel/ports/id-generator';
 import { TRANSACTION_MANAGER } from './shared/kernel/ports/transaction-manager';
+import { NegativeQuantityError } from './shared/kernel/quantity';
 
 let moduleRef: TestingModule;
 
@@ -55,5 +61,31 @@ describe('AppModule DI 그래프', () => {
 
   it('OutboxRelay가 해석된다', () => {
     expect(moduleRef.get(OutboxRelay)).toBeInstanceOf(OutboxRelay);
+  });
+
+  it('DomainExceptionFilter가 APP_FILTER로 등록되어 전역 필터로 설치된다', () => {
+    // main.ts는 더 이상 필터를 설치하지 않는다 — SharedModule의 APP_FILTER
+    // 프로바이더가 유일한 설치 지점이다. Nest는 APP_FILTER로 등록된 프로바이더를
+    // 익명 토큰으로 바꿔 DI 그래프에 감춘 뒤 ApplicationConfig.globalFilters에
+    // 인스턴스를 밀어 넣으므로(같은 compile() 호출 안에서 일어난다), 그 배열을
+    // 직접 들여다보는 것이 설치 여부를 확인하는 유일한 방법이다. 이 프로바이더가
+    // 없어지면 배열이 비고, 이 테스트가 그 회귀를 잡는다.
+    const filters = moduleRef.get(ApplicationConfig).getGlobalFilters();
+    expect(filters).toContainEqual(expect.any(DomainExceptionFilter));
+  });
+
+  it('DomainErrorRegistry가 커널 예외 매핑을 갖춘 채 조립된다', () => {
+    // SharedModule의 팩토리가 registerKernelDomainErrors(registry)를 호출하는지는
+    // AppModule 컴파일이 그 팩토리를 실행한다는 사실(커버리지 100%)만으로는 증명되지
+    // 않는다 — 조립된 레지스트리를 직접 resolve해서 매핑 내용을 확인해야 한다.
+    const registry = moduleRef.get(DomainErrorRegistry);
+    expect(registry.resolve(InvalidIdError.CODE)).toEqual({
+      status: 400,
+      code: ErrorCode.VALIDATION_FAILED,
+    });
+    expect(registry.resolve(NegativeQuantityError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    });
   });
 });
