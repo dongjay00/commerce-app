@@ -1,15 +1,35 @@
 import { DomainError } from './domain-error';
 
 /**
- * `of`의 음수/비정수 입력, `positive`/`of` 공통의 비정수 입력처럼 검증을 통과한
- * 값만 VO에 들어온다는 전제가 깨졌을 때 던진다 — 즉 호출자(어댑터의 Zod 검증 등)가
- * 이미 걸렀어야 할 값이 여기까지 온 프로그래머 에러다. DomainError로 만들지 않는다:
- * 사용자가 고칠 수 있는 게 아니라 코드 버그이므로 500으로 떨어지는 게 맞다.
+ * `of`에 음수가 들어온 경우처럼, 도달했다면 코드 버그인 상황에만 남긴다.
+ * 재고 잔량이 음수가 되는 것은 사용자가 만들 수 있는 상태가 아니라 호출자의 버그다.
+ * DomainError로 만들지 않으므로 500으로 떨어진다.
  */
 export class InvalidQuantityError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'InvalidQuantityError';
+  }
+}
+
+/**
+ * 정수가 아닌 수량. 사용자가 보낸 값이 그대로 도달할 수 있는 자리이므로 DomainError로
+ * 승격해 400을 낸다.
+ *
+ * 이전 구현은 `assertInteger`가 `InvalidQuantityError`(일반 Error)를 던졌고, 그 호출이
+ * `< 1` 검사보다 **먼저** 있었다. 결과적으로 `positive(-3.5)`는 422가 아니라 500이 됐다.
+ * 검사 순서를 바꾸는 대신 예외를 분류한 이유는, 순서만 바꾸면 `positive(2.5)`가 여전히
+ * 500이라 반쪽짜리 수정이 되기 때문이다.
+ *
+ * 어댑터의 Zod 스키마는 이 예외에 의존하지 말고 `.int()`를 함께 걸어야 한다 —
+ * 형식은 Zod가, 의미는 VO가 지킨다(스펙 §8.4). 이 예외는 그 방어선이 뚫렸을 때의 두 번째 그물이다.
+ */
+export class NonIntegerQuantityError extends DomainError {
+  static readonly CODE = 'QUANTITY_NOT_INTEGER';
+  readonly code = NonIntegerQuantityError.CODE;
+
+  constructor(value: number) {
+    super(`수량은 정수여야 합니다: ${value}`);
   }
 }
 
@@ -69,7 +89,7 @@ export class Quantity {
 
   private static assertInteger(value: number): void {
     if (!Number.isInteger(value)) {
-      throw new InvalidQuantityError(`수량은 정수여야 합니다: ${value}`);
+      throw new NonIntegerQuantityError(value);
     }
   }
 

@@ -1,6 +1,10 @@
 import { ErrorCode } from '@commerce/contracts';
 import { InvalidIdError } from '../../kernel/identifiers';
-import { NegativeQuantityError, QuantityBelowMinimumError } from '../../kernel/quantity';
+import {
+  NegativeQuantityError,
+  NonIntegerQuantityError,
+  QuantityBelowMinimumError,
+} from '../../kernel/quantity';
 import type { DomainErrorRegistry } from './domain-error.registry';
 
 /**
@@ -30,5 +34,10 @@ export function registerKernelDomainErrors(registry: DomainErrorRegistry): void 
   registry.register(NegativeQuantityError.CODE, {
     status: 409,
     code: ErrorCode.DOMAIN_RULE_VIOLATED,
+  });
+
+  registry.register(NonIntegerQuantityError.CODE, {
+    status: 400,
+    code: ErrorCode.VALIDATION_FAILED,
   });
 }

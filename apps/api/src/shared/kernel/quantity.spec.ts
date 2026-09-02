@@ -3,6 +3,7 @@ import { DomainError } from './domain-error';
 import {
   InvalidQuantityError,
   NegativeQuantityError,
+  NonIntegerQuantityError,
   Quantity,
   QuantityBelowMinimumError,
 } from './quantity';
@@ -22,7 +23,9 @@ describe('Quantity', () => {
     });
 
     it('소수를 거부한다', () => {
-      expect(() => Quantity.of(1.5)).toThrow(InvalidQuantityError);
+      // M6 분류 변경 이후 비정수 입력은 InvalidQuantityError가 아니라
+      // NonIntegerQuantityError(DomainError)다 — 아래 '비정수 입력의 분류 (M6)'를 참고.
+      expect(() => Quantity.of(1.5)).toThrow(NonIntegerQuantityError);
     });
   });
 
@@ -93,5 +96,38 @@ describe('Quantity', () => {
       expect(() => Quantity.of(-1)).toThrow(InvalidQuantityError);
       expect(new InvalidQuantityError('x')).not.toBeInstanceOf(DomainError);
     });
+  });
+});
+
+// vitest 3.2.7의 toThrow 타입(Constructable = new (...args: any[]) => any)은 concrete
+// 생성자만 받는다. DomainError는 abstract라 그대로 넘기면 tsc가 거부한다(identifiers.spec.ts
+// 참고). 런타임 동작은 abstract 여부와 무관하므로 타입 단계에서만 unknown을 거쳐 우회한다.
+const DomainErrorConstructor = DomainError as unknown as new (...args: never[]) => Error;
+
+describe('비정수 입력의 분류 (M6)', () => {
+  it('positive(-3.5)는 DomainError다 — 500이 아니다', () => {
+    // 예전에는 assertInteger가 InvalidQuantityError(일반 Error)를 던져 500이 났다.
+    // 사용자가 보낸 값 하나 때문에 서버 오류를 내는 것은 정직하지 않다.
+    expect(() => Quantity.positive(-3.5)).toThrow(NonIntegerQuantityError);
+    expect(() => Quantity.positive(-3.5)).toThrow(DomainErrorConstructor);
+  });
+
+  it('positive(2.5)도 같은 분류다', () => {
+    expect(() => Quantity.positive(2.5)).toThrow(NonIntegerQuantityError);
+  });
+
+  it('of(2.5)도 같은 분류다', () => {
+    expect(() => Quantity.of(2.5)).toThrow(NonIntegerQuantityError);
+  });
+
+  it('정수이면서 1 미만인 값은 여전히 QuantityBelowMinimumError다', () => {
+    // 두 실패가 서로 다른 코드를 갖는지가 중요하다. 하나로 뭉치면 프론트가
+    // "정수를 넣으세요"와 "1개 이상 담으세요"를 구분해 안내할 수 없다.
+    expect(() => Quantity.positive(0)).toThrow(QuantityBelowMinimumError);
+    expect(() => Quantity.positive(-3)).toThrow(QuantityBelowMinimumError);
+  });
+
+  it('NonIntegerQuantityError와 QuantityBelowMinimumError의 코드가 서로 다르다', () => {
+    expect(NonIntegerQuantityError.CODE).not.toBe(QuantityBelowMinimumError.CODE);
   });
 });

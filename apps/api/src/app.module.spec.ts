@@ -14,7 +14,7 @@ import { DOMAIN_EVENT_PUBLISHER } from './shared/kernel/ports/domain-event.publi
 import { EVENT_TRANSPORT } from './shared/kernel/ports/event-transport';
 import { ID_GENERATOR } from './shared/kernel/ports/id-generator';
 import { TRANSACTION_MANAGER } from './shared/kernel/ports/transaction-manager';
-import { NegativeQuantityError } from './shared/kernel/quantity';
+import { NegativeQuantityError, NonIntegerQuantityError } from './shared/kernel/quantity';
 
 let moduleRef: TestingModule;
 
@@ -86,6 +86,10 @@ describe('AppModule DI 그래프', () => {
     expect(registry.resolve(NegativeQuantityError.CODE)).toEqual({
       status: 409,
       code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    });
+    expect(registry.resolve(NonIntegerQuantityError.CODE)).toEqual({
+      status: 400,
+      code: ErrorCode.VALIDATION_FAILED,
     });
   });
 });
