@@ -136,17 +136,25 @@ describe('OutboxRelay', () => {
     expect(poison?.publishedAt).toBeNull();
     expect(healthy?.publishedAt).not.toBeNull();
 
-    // 두 번째 폴링에서 새로 들어온 이벤트로 head-of-line blocking을 검증한다.
-    // Healthy는 이미 발행되어 재선택되지 않으므로, `resolves.toBe(0)`만으로는
-    // Poison이 뒤따르는 이벤트를 막지 않는다는 것을 증명하지 못한다 — Poison이
-    // 여전히 백오프 중인 채로 그 뒤에 도착한 Third가 배달되어야 증명된다.
+    // 두 번째 폴링에서는 Poison의 백오프(attempts=1 → 2초)가 지나도록 시계를
+    // 돌려, Poison이 실제로 다시 선택되게 만든다. 시계를 그대로 두면 Poison은
+    // nextAttemptAt 조건에 걸려 이번 배치에서 아예 빠지므로 — 그 상태에서
+    // Third만 배달돼도 "재선택된 Poison이 배치를 막지 않는다"는 증명은 안
+    // 되고, 이미 :94-111에서 검증한 "백오프 중인 행은 재선택되지 않는다"만
+    // 반복하는 셈이다. 여기서는 Poison이 같은 배치에서 다시 실패하는 동안
+    // Third가 배달되는지를 본다.
     await seedEvent('Third', '2026-01-03T00:00:00Z');
+    clock.advanceBy(Duration.seconds(2));
     await expect(relay.relayOnce()).resolves.toBe(1);
     expect(transport.sent.map((r) => r.eventType)).toEqual(['Healthy', 'Third']);
 
+    // attempts===2가 핵심이다: Poison이 필터링되어 조용히 빠진 게 아니라
+    // 배치에 실제로 들어와 다시 실패했다는 증거다.
+    const poisonAfter = await db.outbox.findFirst({ where: { eventType: 'Poison' } });
+    expect(poisonAfter?.attempts).toBe(2);
+    expect(poisonAfter?.publishedAt).toBeNull();
     const third = await db.outbox.findFirst({ where: { eventType: 'Third' } });
     expect(third?.publishedAt).not.toBeNull();
-    expect((await db.outbox.findFirst({ where: { eventType: 'Poison' } }))?.publishedAt).toBeNull();
   });
 
   it('전송 실패 시 attempts를 늘리고 last_error를 남긴다', async () => {
@@ -192,6 +200,43 @@ describe('OutboxRelay', () => {
     const row = await db.outbox.findUniqueOrThrow({ where: { id } });
     expect(row.publishedAt).toBeNull();
     expect(row.lastError).toBe('이전 실패 10회');
+  });
+
+  it('발행 마킹 update가 실패하면 전송 실패로 오기록하지 않고 배치를 중단한다', async () => {
+    const first = await seedEvent('First', '2026-01-01T00:00:00Z');
+    await seedEvent('Second', '2026-01-02T00:00:00Z');
+
+    // 모킹 라이브러리 없이, Clock.now() 호출 두 번째 것만 던지게 만든다.
+    // relayOnce의 호출 순서는 고정적이다: ①배치 조회 시각(맨 위) ②First
+    // 발행 마킹 update가 읽는 시각. 이 두 번째 호출에서만 실패시켜 "send는
+    // 성공했지만 그 직후 DB에 publishedAt을 쓰지 못한다"를 재현한다.
+    // (재시도 기록 update가 읽는 nextAttemptAt 계산도 clock.now()를 쓰지만,
+    // 그건 이 시나리오에서 세 번째 호출이라 영향받지 않는다 — 그 update가
+    // 실제로 실행되어야 "현재 구현이 두 update를 구분하는지"가 드러난다.)
+    let calls = 0;
+    const flakyClock = {
+      now: (): Date => {
+        calls += 1;
+        if (calls === 2) {
+          throw new Error('시각 조회 실패');
+        }
+        return clock.now();
+      },
+    };
+    relay = new OutboxRelay(db, transport, flakyClock);
+
+    await expect(relay.relayOnce()).rejects.toThrow('시각 조회 실패');
+
+    const firstRow = await db.outbox.findUniqueOrThrow({ where: { id: first } });
+    expect(firstRow.attempts).toBe(0); // transport를 탓하지 않았다
+    expect(firstRow.lastError).toBeNull(); // last_error에 이 실패가 새어 나가지 않았다
+    expect(firstRow.publishedAt).toBeNull();
+    expect(transport.sent.map((r) => r.eventType)).toEqual(['First']);
+
+    // Second는 손대지 않았다 — 배치가 중단됐다는 증거.
+    const second = await db.outbox.findFirstOrThrow({ where: { eventType: 'Second' } });
+    expect(second.attempts).toBe(0);
+    expect(second.publishedAt).toBeNull();
   });
 
   it('데드레터로 전이하는 실패는 로그를 남기지만, 그 전 재시도들은 남기지 않는다', async () => {
