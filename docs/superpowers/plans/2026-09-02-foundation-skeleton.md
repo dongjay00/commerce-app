@@ -3631,8 +3631,20 @@ describe('AppModule DI 그래프', () => {
     expect(controller).toBeInstanceOf(HealthController);
   });
 
-  it('PrismaService가 해석된다', () => {
-    expect(moduleRef.get(PrismaService)).toBeInstanceOf(PrismaService);
+  it('PrismaService가 해석되고 프록시 뒤에서 생명주기 훅이 살아 있다', () => {
+    // Prisma 7의 클라이언트는 Proxy이며 그 프로토타입 체인에 PrismaService.prototype이 없다.
+    // 따라서 `instanceof PrismaService`는 false이고, vitest의 toBeInstanceOf는
+    // 실패 diff를 만들다 Proxy 트랩을 무한 순회해 RangeError로 터진다.
+    // prototype 동일성은 우리가 알고 싶은 성질이 아니다. 알고 싶은 것은
+    // "DI가 동작하는 Prisma 클라이언트를 해석했고, Nest가 호출할 훅이 프록시를 통과해
+    //  여전히 도달 가능한가"이며, 아래가 정확히 그것을 고정한다.
+    const prisma = moduleRef.get(PrismaService);
+    expect(prisma).toBeDefined();
+    expect(prisma.constructor?.name).toBe('PrismaService');
+    expect(typeof prisma.$queryRaw).toBe('function');
+    expect(typeof prisma.$transaction).toBe('function');
+    expect(typeof prisma.onModuleInit).toBe('function');
+    expect(typeof prisma.onModuleDestroy).toBe('function');
   });
 
   it('횡단 포트 5개가 모두 해석된다', () => {
