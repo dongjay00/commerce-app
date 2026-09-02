@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AccountId, CorruptedRecordError } from '../../../../../shared/kernel/identifiers';
 import { Account } from '../../../domain/account';
 import { Credential } from '../../../domain/credential';
-import { Email } from '../../../domain/email';
+import { CorruptedEmailError, Email } from '../../../domain/email';
 import { toAccountDomain, toAccountRow } from './account.mapper';
 
 const ID = '018f2b1c-4a5d-7e6f-8a9b-0c1d2e3ff001';
@@ -46,6 +46,13 @@ describe('account.mapper', () => {
     // M7. `of`를 쓰면 InvalidIdError(400)가 나가서, 우리 DB가 깨진 상황에
     // "당신의 요청이 잘못됐다"고 답하게 된다.
     expect(() => toAccountDomain({ ...row, id: 'broken' })).toThrow(CorruptedRecordError);
+  });
+
+  it('깨진 이메일을 만나면 CorruptedEmailError를 던진다 — DomainError가 아니다', () => {
+    // I2/M7. `of`를 쓰면 InvalidEmailError(400)가 나가서, 우리 DB가 깨진 상황에
+    // "당신의 요청이 잘못됐다"고 답하게 된다. 저장된 accounts.email이 형식을 어긴
+    // 것은 클라이언트 잘못이 아니다.
+    expect(() => toAccountDomain({ ...row, email: '   ' })).toThrow(CorruptedEmailError);
   });
 
   it('왕복해도 값이 보존된다', () => {

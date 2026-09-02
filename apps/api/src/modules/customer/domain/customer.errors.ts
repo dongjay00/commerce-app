@@ -4,6 +4,8 @@ import { DomainError } from '../../../shared/kernel/domain-error';
  * 주소 항목이 비어 있다. 어댑터의 Zod도 같은 것을 보지만(스펙 §8.4의 형식 검증),
  * 여기 한 벌 더 있는 이유는 HTTP가 아닌 경로로 들어올 때도 배송 불가능한 주소가
  * 저장되지 않게 하기 위해서다.
+ *
+ * `AddressDetails.of` 전용이다 — 인바운드 값이 비어 있을 때만 던진다(400).
  */
 export class InvalidAddressError extends DomainError {
   static readonly CODE = 'INVALID_ADDRESS';
@@ -11,6 +13,23 @@ export class InvalidAddressError extends DomainError {
 
   constructor(field: string) {
     super(`주소의 ${field}은(는) 비어 있을 수 없습니다.`);
+  }
+}
+
+/**
+ * 저장된 `saved_addresses` 행의 한 칸이 비어 있을 때 던진다.
+ *
+ * `InvalidAddressError`와 갈라놓은 이유는 이 파일의 `CorruptedAddressBookError`,
+ * `identifiers.ts`의 `CorruptedRecordError`와 같다 — 두 경로가 같은 예외를 던지면
+ * **저장된 행이 깨진 상황에 400을 응답한다.** 클라이언트의 요청은 멀쩡했고 우리
+ * 데이터가 깨진 것이므로 `DomainError`로 만들지 않고 500으로 떨어뜨린다.
+ * `AddressDetails.fromPersistence` 전용이다.
+ */
+export class CorruptedAddressError extends Error {
+  constructor(field: string) {
+    super(`저장된 주소의 ${field} 값이 비어 있습니다.`);
+    this.name = 'CorruptedAddressError';
+    Error.captureStackTrace?.(this, CorruptedAddressError);
   }
 }
 

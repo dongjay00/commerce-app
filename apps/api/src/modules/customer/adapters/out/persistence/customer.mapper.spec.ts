@@ -7,6 +7,7 @@ import {
 } from '../../../../../shared/kernel/identifiers';
 import { AddressDetails } from '../../../domain/address-details';
 import { Customer } from '../../../domain/customer';
+import { CorruptedAddressError } from '../../../domain/customer.errors';
 import { toCustomerDomain, toSavedAddressRows } from './customer.mapper';
 
 const CUSTOMER_ID = '018f2b1c-4a5d-7e6f-8a9b-0c1dc05ef001';
@@ -77,6 +78,15 @@ describe('customer.mapper', () => {
     expect(() =>
       toCustomerDomain({ ...row, addresses: [{ ...addressRow, id: 'broken' }] }),
     ).toThrow(CorruptedRecordError);
+  });
+
+  it('빈 칸이 저장된 주소를 만나면 CorruptedAddressError를 던진다 — DomainError가 아니다', () => {
+    // I2/M7. `AddressDetails.of`를 쓰면 InvalidAddressError(400)가 나가서, 우리 DB가
+    // 깨진 상황에 "당신의 요청이 잘못됐다"고 답하게 된다. saved_addresses의 컬럼은
+    // NOT NULL이지만 빈 문자열까지는 막지 않으므로 이 상태가 저장될 수 있다.
+    expect(() =>
+      toCustomerDomain({ ...row, addresses: [{ ...addressRow, recipient: '   ' }] }),
+    ).toThrow(CorruptedAddressError);
   });
 
   it('애그리거트를 주소 행 목록으로 되돌린다', () => {

@@ -19,7 +19,32 @@ function withToken(args: ApiFetcherArgs, accessToken: string): ApiFetcherArgs {
   return { ...args, headers: { ...args.headers, authorization: `Bearer ${accessToken}` } };
 }
 
+/**
+ * 같은 리프레시 토큰으로 동시에 들어온 갱신 요청을 하나로 합친다(single-flight).
+ *
+ * 서버의 회전은 원자적이라(refresh-session.service.ts) 같은 토큰으로 두 번 갱신을
+ * 시도하면 하나만 이기고 나머지는 SESSION_NOT_FOUND → 401을 받는다. 그 401을
+ * `createAuthenticatedApi`가 그대로 세션 폐기로 처리하면, 멀쩡한 세션을 가진 사용자가
+ * 두 요청을 동시에 보냈다는 이유만으로 로그아웃된다. 키를 리프레시 토큰 문자열로
+ * 삼으므로 다른 세션(다른 토큰)끼리는 서로 기다리지 않고, 항목은 settle되는 즉시
+ * 지워지므로 이 맵이 무한히 자라지 않는다.
+ */
+const inFlightRefreshes = new Map<string, Promise<Tokens | null>>();
+
 async function refreshTokens(baseUrl: string, refreshToken: string): Promise<Tokens | null> {
+  const existing = inFlightRefreshes.get(refreshToken);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const promise = doRefreshTokens(baseUrl, refreshToken).finally(() => {
+    inFlightRefreshes.delete(refreshToken);
+  });
+  inFlightRefreshes.set(refreshToken, promise);
+  return promise;
+}
+
+async function doRefreshTokens(baseUrl: string, refreshToken: string): Promise<Tokens | null> {
   const response = await fetch(`${baseUrl}/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

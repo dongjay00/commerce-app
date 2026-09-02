@@ -130,6 +130,22 @@ describe('createApiClient', () => {
     expect(refreshCalls).toBe(0);
   });
 
+  it('동시에 두 요청이 401을 받아도 갱신은 정확히 한 번만 일어난다', async () => {
+    // I4: 서버의 회전은 원자적이라 같은 리프레시 토큰으로 두 번 갱신을 시도하면
+    // 하나만 이기고 나머지는 401을 받는다. single-flight가 없으면 이 테스트는
+    // refreshCalls === 2와 함께 둘 중 하나가 SessionExpiredError로 실패한다.
+    addressesReturning(401, 401, 200, 200);
+    refreshReturning(200);
+    const store = new InMemoryTokenStore({ accessToken: 'access-1', refreshToken: 'refresh-1' });
+    const client = createApiClient(BASE, store);
+
+    const [first, second] = await Promise.all([client.address.list(), client.address.list()]);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(refreshCalls).toBe(1);
+  });
+
   it('갱신 응답이 200인데 JSON이 아니면 세션을 지운다', async () => {
     // response.json()이 예외를 던지면 안 된다 — 프록시가 200과 함께 비-JSON 본문을
     // 돌려주는 경우에도 계약과 다른 응답과 같은 경로(세션 폐기)로 처리한다.

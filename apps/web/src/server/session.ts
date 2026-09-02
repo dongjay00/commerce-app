@@ -20,15 +20,22 @@ export function requireSessionPassword(env: Record<string, string | undefined>):
   return password;
 }
 
-function sessionOptions(): SessionOptions {
+/**
+ * 스펙 §8.5가 요구하는 세 속성(HttpOnly, Secure, SameSite=Lax)을 담은 쿠키 옵션.
+ * `cookies()`도 `getIronSession`도 필요 없는 `process.env`의 순수 함수라, 이 값을
+ * 인자로 받게 해 `requireSessionPassword`와 같은 이유로 `session.spec.ts`가 직접
+ * 검증한다 — 이 세 줄이 이 계층 전체가 존재하는 이유이므로, 커버리지 없는 부분에
+ * 두면 안 된다.
+ */
+export function sessionOptions(env: Record<string, string | undefined>): SessionOptions {
   return {
-    password: requireSessionPassword(process.env),
+    password: requireSessionPassword(env),
     cookieName: 'sid',
     cookieOptions: {
       // 스펙 §8.5: 브라우저 자바스크립트는 토큰을 볼 수 없다. XSS 노출면이 줄어든다.
       httpOnly: true,
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: env['NODE_ENV'] === 'production',
       path: '/',
     },
   };
@@ -46,7 +53,7 @@ function sessionOptions(): SessionOptions {
  * 있다. `cookieTokenStore`의 실제 동작은 다음 계획의 Playwright E2E가 확인한다.
  */
 export async function cookieTokenStore(): Promise<TokenStore> {
-  const session = await getIronSession<SessionData>(await cookies(), sessionOptions());
+  const session = await getIronSession<SessionData>(await cookies(), sessionOptions(process.env));
 
   return {
     async read(): Promise<Tokens | null> {

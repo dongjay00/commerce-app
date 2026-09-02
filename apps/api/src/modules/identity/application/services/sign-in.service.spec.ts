@@ -4,6 +4,7 @@ import { MutableClock } from '../../../../shared/testing/mutable-clock';
 import { SequentialIdGenerator } from '../../../../shared/testing/sequential-id-generator';
 import { Account } from '../../domain/account';
 import { InvalidCredentialsError } from '../../domain/account.errors';
+import type { Credential } from '../../domain/credential';
 import { Email } from '../../domain/email';
 import { PlainPassword } from '../../domain/plain-password';
 import { FakePasswordHasher } from '../../testing/fake-password-hasher';
@@ -22,11 +23,25 @@ import { SignInService } from './sign-in.service';
 
 const ACCOUNT_ID = AccountId.of('018f2b1c-4a5d-7e6f-8a9b-0c1d2e3f7001');
 
-async function build() {
+/**
+ * 해싱 검증 호출 횟수를 세는 fake. `vi.spyOn` 대신 상속으로 만든다 — 목 라이브러리
+ * 금지 규칙을 지키면서 "언제 verify를 호출했는가"를 상태로 검증하는 방법이다.
+ * (sign-up.service.spec.ts의 CountingPasswordHasher와 같은 패턴, hash 대신 verify를 센다.)
+ */
+class CountingPasswordHasher extends FakePasswordHasher {
+  verifyCalls = 0;
+
+  override async verify(credential: Credential, password: PlainPassword): Promise<boolean> {
+    this.verifyCalls += 1;
+    return super.verify(credential, password);
+  }
+}
+
+async function build(overrides: { hasher?: FakePasswordHasher } = {}) {
   const accounts = new InMemoryAccountRepository();
   const sessions = new InMemorySessionRepository();
   const customers = new StubCustomerDirectory();
-  const hasher = new FakePasswordHasher();
+  const hasher = overrides.hasher ?? new FakePasswordHasher();
   const tokens = new FakeTokenIssuer(900);
   const clock = new MutableClock(FIXED_NOW);
   const ids = new SequentialIdGenerator();
@@ -131,6 +146,21 @@ describe('SignInService', () => {
 
     expect(unknownEmail).toBeInstanceOf(InvalidCredentialsError);
     expect((unknownEmail as Error).message).toBe((wrongPassword as Error).message);
+  });
+
+  it('없는 이메일이어도 해셔를 호출한다 — 계정 존재 여부가 응답 시간으로 새지 않는다', async () => {
+    // I1: 이메일이 없다고 바로 리턴하면, 해싱 비용(~100ms)을 치르는 "비밀번호가 틀림"
+    // 경로와 시간 차가 나서 그 자체가 계정 존재 여부를 알려주는 오라클이 된다.
+    // 존재하지 않는 계정에도 (더미 자격증명에 대해) verify를 호출해야 두 경로의
+    // 작업량이 같아진다.
+    const hasher = new CountingPasswordHasher();
+    const { service } = await build({ hasher });
+
+    await expect(
+      service.execute({ email: 'nobody@example.com', password: VALID_PASSWORD }),
+    ).rejects.toThrow(InvalidCredentialsError);
+
+    expect(hasher.verifyCalls).toBe(1);
   });
 
   it('로그인 실패는 세션을 만들지 않는다', async () => {

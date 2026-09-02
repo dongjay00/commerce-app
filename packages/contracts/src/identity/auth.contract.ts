@@ -52,6 +52,7 @@ export const authContract = c.router({
     body: signInBodySchema,
     responses: {
       200: sessionTokensSchema,
+      400: errorDtoSchema, // VALIDATION_FAILED
       401: errorDtoSchema, // INVALID_CREDENTIALS
     },
     summary: '로그인',
@@ -62,6 +63,7 @@ export const authContract = c.router({
     body: refreshBodySchema,
     responses: {
       200: sessionTokensSchema,
+      400: errorDtoSchema, // VALIDATION_FAILED
       401: errorDtoSchema, // UNAUTHENTICATED — 만료·폐기·미존재를 모두 포함
     },
     summary: '리프레시 토큰을 회전시켜 새 세션을 받는다',
@@ -72,6 +74,7 @@ export const authContract = c.router({
     body: refreshBodySchema,
     responses: {
       204: c.noBody(),
+      400: errorDtoSchema, // VALIDATION_FAILED
     },
     summary: '세션을 폐기한다. 이미 없는 토큰이어도 204 (멱등)',
   },
@@ -81,6 +84,7 @@ export const authContract = c.router({
     body: changePasswordBodySchema,
     responses: {
       204: c.noBody(),
+      400: errorDtoSchema, // VALIDATION_FAILED
       401: errorDtoSchema, // UNAUTHENTICATED 또는 INVALID_CREDENTIALS
       422: errorDtoSchema, // PASSWORD_POLICY_VIOLATED
     },

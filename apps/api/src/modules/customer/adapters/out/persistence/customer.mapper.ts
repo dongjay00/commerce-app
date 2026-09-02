@@ -22,7 +22,12 @@ export interface CustomerRow {
   addresses: SavedAddressRow[];
 }
 
-/** M7: 영속 복원에는 `fromPersistence`를 쓴다. 깨진 행은 400이 아니라 500이다. */
+/**
+ * M7: 영속 복원에는 `fromPersistence`를 쓴다. 깨진 행은 400이 아니라 500이다.
+ * `CustomerId`/`AccountId`/`AddressId`의 `fromPersistence`뿐 아니라
+ * `AddressDetails.fromPersistence`도 마찬가지다 — 빈 칸이 저장된 행을 `of`로
+ * 복원하면 `InvalidAddressError`(400)가 나가 멀쩡한 요청을 거짓으로 거절하게 된다.
+ */
 export function toCustomerDomain(row: CustomerRow): Customer {
   return Customer.rehydrate({
     id: CustomerId.fromPersistence(row.id),
@@ -32,7 +37,7 @@ export function toCustomerDomain(row: CustomerRow): Customer {
       (address) =>
         new SavedAddress(
           AddressId.fromPersistence(address.id),
-          AddressDetails.of({
+          AddressDetails.fromPersistence({
             label: address.label,
             recipient: address.recipient,
             phone: address.phone,
