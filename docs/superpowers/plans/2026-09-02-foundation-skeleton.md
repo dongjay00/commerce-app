@@ -4152,6 +4152,17 @@ module.exports = {
       to: { path: '^apps/api' },
     },
     {
+      // 대칭 규칙이 반드시 있어야 한다. tsconfig.base.json이 `@/*`를 apps/web/src로
+      // 매핑하고 apps/api가 자기 paths를 선언하지 않아 그것을 상속하므로,
+      // api의 파일이 `@/shared/lib/x`를 쓰면 web으로 **해석에 성공한다**.
+      // 즉 not-to-unresolvable도 잡지 못한다 — 미해결이 아니라 정상 해석이기 때문이다.
+      // 반대 방향 규칙만 두면 이 경로가 통째로 무방비다.
+      name: 'api-must-not-import-web',
+      severity: 'error',
+      from: { path: '^apps/api' },
+      to: { path: '^apps/web' },
+    },
+    {
       name: 'contracts-is-a-leaf',
       severity: 'error',
       from: { path: '^packages/contracts' },
