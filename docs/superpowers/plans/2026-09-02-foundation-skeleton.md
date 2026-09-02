@@ -1674,7 +1674,8 @@ git commit -m "feat: Docker Postgres와 outbox 테이블 스키마"
 - Create: `apps/api/test/setup/database.ts`
 - Create: `apps/api/test/setup/integration-setup.ts`
 - Test: `apps/api/test/setup/database.integration.spec.ts`
-- Modify: `vitest.config.ts` (api-integration 프로젝트 추가)
+- Create: `apps/api/tsconfig.typecheck.json`
+- Modify: `vitest.config.ts` (api-integration 프로젝트 추가), `apps/api/package.json` (typecheck 스크립트)
 - Modify: `package.json` (pg, dotenv 의존성)
 
 **Interfaces:**
@@ -1896,6 +1897,40 @@ export default defineConfig({
   "test:int": "vitest run --project api-integration"
 }
 ```
+
+- [ ] **Step 5b: typecheck가 test/** 를 커버하게 만든다**
+
+`apps/api/tsconfig.json`의 `include`는 `src/**`뿐이라, 지금 만든 `apps/api/test/**`가
+`pnpm typecheck`에서 영구히 빠진다. `pnpm verify`가 이 계획의 완료 게이트이므로 그대로 두면
+게이트가 거짓말을 한다.
+
+`include`에 `test/**/*.ts`를 그냥 추가하는 것은 동작하지 않는다 — `rootDir: "src"` 때문에
+`error TS6059: File ... is not under 'rootDir'`로 실패한다. 별도 설정 파일을 둔다.
+
+`apps/api/tsconfig.typecheck.json`:
+
+```json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "prisma7.config.ts"]
+}
+```
+
+`apps/api/package.json`의 typecheck 스크립트를 이 파일로 돌린다:
+
+```json
+"typecheck": "tsc -p tsconfig.typecheck.json"
+```
+
+`tsconfig.json`은 build 전용으로 그대로 둔다 — dist 산출물에 테스트 파일이 섞이지 않는다.
+`prisma7.config.ts`(Task 5에서 생성)도 같은 이유로 검사 대상 밖이었으므로 함께 포함한다.
+
+Run: `pnpm typecheck && pnpm --filter @commerce/api exec tsc -p tsconfig.typecheck.json --listFiles | grep -c 'apps/api/test'`
+Expected: 통과하고, test 디렉터리 파일이 4개 잡힌다.
 
 - [ ] **Step 6: 격리가 실제로 동작하는지 검증하는 테스트 작성**
 
