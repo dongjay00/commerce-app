@@ -49,12 +49,15 @@ describe('테스트 DB 격리', () => {
     await expect(db.outbox.count()).resolves.toBe(0);
   });
 
-  it('connection_limit이 20으로 설정되어 동시 커넥션이 확보된다', async () => {
+  it('풀이 20이라 20개의 pg_sleep(0.3) 쿼리가 직렬화 없이 병렬로 끝난다', async () => {
     const db = await testDb();
-    // 동시에 10개 쿼리를 던져도 직렬화되지 않고 모두 성공해야 한다.
-    const results = await Promise.all(
-      Array.from({ length: 10 }, () => db.$queryRaw<Array<{ n: number }>>`SELECT 1 AS n`),
-    );
-    expect(results).toHaveLength(10);
+    // Promise.all(N개) 성공 개수만 세면 풀 크기가 1이어도 그냥 순차 대기 후 전부
+    // 성공하므로 풀 크기를 구분하지 못한다 — 이 테스트가 고치려는 결함이 정확히 그것이다.
+    // 대신 풀이 직렬화하면만 관측되는 벽시계 시간을 잰다: 풀이 1이면 20 * 0.3s = 6s 이상
+    // 걸리고, 풀이 20(이상)이면 오버헤드를 감안해도 1.5s 안에 끝난다.
+    // pg_sleep은 void를 반환해 Prisma가 역직렬화하지 못하므로 IS NULL로 boolean으로 캐스팅한다.
+    const started = Date.now();
+    await Promise.all(Array.from({ length: 20 }, () => db.$queryRaw`SELECT pg_sleep(0.3) IS NULL`));
+    expect(Date.now() - started).toBeLessThan(1500);
   });
 });
