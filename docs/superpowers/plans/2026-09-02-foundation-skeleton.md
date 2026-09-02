@@ -3275,7 +3275,7 @@ import type { ErrorDto } from '@commerce/contracts';
 import { type ArgumentsHost, Catch, type ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
 import { DomainError } from '../../kernel/domain-error';
-// biome-ignore lint/style/useImportType: 다른 어댑터의 DI 대상 클래스들과 동일한 값 import 패턴을 유지한다.
+// biome-ignore lint/style/useImportType: 일관성 목적이며 여기서는 DI 필수 아님 — 이 필터는 main.ts에서 손으로 생성된다.
 import { DomainErrorRegistry } from './domain-error.registry';
 
 /**
@@ -3594,6 +3594,68 @@ Expected: FAIL — 데코레이터 메타데이터 또는 모듈 resolve 실패.
 
 Run: `pnpm vitest run --project api-integration domain-exception.filter`
 Expected: PASS — 4 tests passed
+
+- [ ] **Step 11b: DI 그래프가 실제로 조립되는지 테스트한다**
+
+Step 12의 수동 curl 없이는 잡히지 않는 구멍이 있다. `useImportType` 자동 수정으로 DI가 깨져도
+typecheck·lint·전체 테스트가 모두 통과한다 — `pnpm verify`가 기동조차 못 하는 앱에 초록불을 준다.
+DB 없이 컨테이너 조립만 검증하는 테스트로 그 구멍을 막는다.
+
+`apps/api/src/app.module.spec.ts`:
+
+```ts
+import { Test, type TestingModule } from '@nestjs/testing';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { AppModule } from './app.module';
+import { HealthController } from './shared/infrastructure/http/health.controller';
+import { OutboxRelay } from './shared/infrastructure/outbox/outbox-relay';
+import { PrismaService } from './shared/infrastructure/prisma/prisma.service';
+import { CLOCK } from './shared/kernel/ports/clock';
+import { DOMAIN_EVENT_PUBLISHER } from './shared/kernel/ports/domain-event.publisher';
+import { EVENT_TRANSPORT } from './shared/kernel/ports/event-transport';
+import { ID_GENERATOR } from './shared/kernel/ports/id-generator';
+import { TRANSACTION_MANAGER } from './shared/kernel/ports/transaction-manager';
+
+let moduleRef: TestingModule;
+
+beforeAll(async () => {
+  // compile()은 컨테이너만 조립한다 — onModuleInit($connect)은 호출되지 않으므로 DB가 필요 없다.
+  moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+});
+
+describe('AppModule DI 그래프', () => {
+  it('HealthController가 PrismaService를 주입받는다', () => {
+    // PrismaService import가 `import type`으로 바뀌면 design:paramtypes가 Object가 되어
+    // Nest가 의존성을 해석하지 못한다. 이 테스트가 그 회귀를 잡는다.
+    const controller = moduleRef.get(HealthController);
+    expect(controller).toBeInstanceOf(HealthController);
+  });
+
+  it('PrismaService가 해석된다', () => {
+    expect(moduleRef.get(PrismaService)).toBeInstanceOf(PrismaService);
+  });
+
+  it('횡단 포트 5개가 모두 해석된다', () => {
+    for (const token of [
+      CLOCK,
+      ID_GENERATOR,
+      TRANSACTION_MANAGER,
+      DOMAIN_EVENT_PUBLISHER,
+      EVENT_TRANSPORT,
+    ]) {
+      expect(moduleRef.get(token)).toBeDefined();
+    }
+  });
+
+  it('OutboxRelay가 해석된다', () => {
+    expect(moduleRef.get(OutboxRelay)).toBeInstanceOf(OutboxRelay);
+  });
+});
+```
+
+Run: `pnpm vitest run --project api-unit app.module`
+Expected: PASS — 4 tests passed. `PrismaService` 생성자가 `DATABASE_URL`을 읽으므로
+`apps/api/.env`가 있어야 한다(vitest.config.ts가 dotenv로 로드한다). DB 연결은 하지 않는다.
 
 - [ ] **Step 12: 서버를 실제로 띄워 health 확인**
 
