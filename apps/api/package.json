@@ -19,6 +19,7 @@
     "vitest": "^3.2.0"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "uuid": "^14.0.2"
   }
