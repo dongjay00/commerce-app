@@ -9561,3 +9561,38 @@ git commit -m "feat(web): BFF 암호화 쿠키 세션과 401 refresh 재시도�
 - **리프레시 토큰 절대 상한** — 현재는 sliding window라 활동 중인 세션이 무기한 산다. `issued_at`이 이미 있으므로 컬럼 추가 없이 넣을 수 있다
 - **`OutboxRelay` 스케줄러 배선** — `AccountRegistered`가 outbox에 쌓이지만 아직 발행되지 않는다. 계획 3의 몫이다
 - **계정 잠금·2FA·이메일 확인** — 스펙 §1.3의 백로그
+
+---
+
+## 부록 — 최종 리뷰가 계획 3(Ordering)으로 넘긴 것
+
+이 계획의 최종 전체 리뷰(Critical 0, Important 5 — 전부 병합 전 수정)가 남긴 이월 사항이다.
+수정된 I1~I5는 여기 없다. 아래는 **다음 계획이 시작할 때 제약으로 삼아야 할 것들**이다.
+
+- **`AddressBook.remove`는 기본 배송지가 없는 상태를 남긴다** (`address-book.ts`, 의도된 동작).
+  체크아웃은 "주소는 있는데 기본이 없음"을 1급 상태로 다뤄야 하고, `defaultAddress !== null`을
+  가정하면 안 된다. "한 계층이 강제하는 불변식을 다른 계층이 조용히 가정한다"의 전형이라,
+  계획 3의 Global Constraints에 명시적으로 적을 것.
+- **액세스 토큰은 로그아웃·비밀번호 변경 후에도 TTL(15분)까지 살아 있다.** 무상태 JWT의 본질이고
+  이 설계에서는 옳다(`sessions` 테이블이 주는 것은 *리프레시*의 즉시 무효화이며 그게 핵심이다).
+  다만 어디에도 적혀 있지 않아, 계획 3에서 "로그아웃했는데 15분간 주문이 되는가"라는 질문이
+  반드시 나온다. 스펙이나 `JwtTokenService`에 한 문장 남길 것.
+- **`PassthroughTransactionManager`는 롤백하지 않는다.** 사가의 보상 동작 중 롤백에 의존하는
+  것은 전부 계약 스위트의 `skipIf(runInTransaction === undefined)` 형태가 필요하다.
+  태스크 N에서 발견하지 말고 처음부터 계획에 넣을 것.
+- **`OutboxRelay` 배선 시 결정할 세 가지**: `relayOnce()`는 `this.prisma`를 직접 쓰고
+  `FOR UPDATE SKIP LOCKED`나 어드바이저리 락이 없어 인스턴스가 둘이면 중복 발송한다 —
+  문서화된 at-least-once 계약상 허용이지만, 그래서 **사가의 보상 핸들러가 진짜로 멱등해야 한다는
+  것이 선택이 아니라 요구사항이 된다.** `@nestjs/schedule`은 아직 의존성이 아니다.
+  `OutboxRelay` 자체는 이미 `SharedModule`에서 export되고 해석되므로 배선은 프로바이더 하나와
+  cron 데코레이터다.
+- **계약의 응답 맵을 단일 출처로 만드는 검사를 고려할 것.** Ordering은 라우트당 상태 코드가
+  훨씬 많아진다(409 `INSUFFICIENT_STOCK`, 422 `ORDER_NOT_CANCELLABLE`, 422 `PAYMENT_DECLINED`).
+  "각 라우트의 응답 맵에 선언된 상태 = 그 모듈에 등록된 `DomainError`가 낼 수 있는 상태"를
+  단언하는 테스트 하나면, 이번에 두 번 따로 고쳤던 종류의 누락이 구조적으로 막힌다.
+- **`toAddressView`가 서비스와 `InMemoryAddressQuery` 양쪽에 중복돼 있다.** 이번엔 무해했지만
+  두 `AddressQuery` 구현이 보조 정렬에서 갈라진 기전이 바로 이 중복이다. Ordering이 두 번째
+  읽기 모델을 추가할 때 합칠 것.
+- **`sign-in.service.ts`가 `node:crypto`를 import한다**(더미 자격증명 생성용). 명시된 경계 규칙
+  위반은 아니고 `arch:check`도 통과하지만, 애플리케이션 계층이 암호 원시연산을 아는 형태다.
+  어댑터로 옮기거나 상수로 대체할지 재검토할 것.
