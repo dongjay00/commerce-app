@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// 도메인 이벤트를 애그리거트 저장과 같은 트랜잭션으로 커밋하기 위한 테이블.
+/// 릴레이가 published_at IS NULL 인 행만 폴링해 발행한다.
+model Outbox {
+  id            String    @id @db.Uuid
+  aggregateType String    @map("aggregate_type")
+  aggregateId   String    @map("aggregate_id") @db.Uuid
+  eventType     String    @map("event_type")
+  payload       Json      @db.JsonB
+  occurredAt    DateTime  @map("occurred_at") @db.Timestamptz(3)
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
+
+  @@map("outbox")
+}
