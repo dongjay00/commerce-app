@@ -46,27 +46,25 @@ export class AddressBook {
   }
 
   update(id: AddressId, details: AddressDetails): SavedAddress {
-    const address = this.require(id);
-    address.changeDetails(details);
-    return address;
+    const current = this.require(id);
+    const updated = current.withDetails(details);
+    this.items[this.items.indexOf(current)] = updated;
+    return updated;
   }
 
   remove(id: AddressId): void {
-    const index = this.items.findIndex((item) => item.id === id);
-    if (index === -1) {
-      throw new AddressNotFoundError(id);
-    }
+    const current = this.require(id);
     // 남은 주소 중 하나를 자동 승격시키지 않는다. 어디로 배송할지는 사용자의 결정이고,
     // 시스템이 임의로 고르면 다음 주문이 엉뚱한 곳으로 간다.
-    this.items.splice(index, 1);
+    this.items.splice(this.items.indexOf(current), 1);
   }
 
   setDefault(id: AddressId): void {
     // 찾기를 먼저 한다. 없는 ID로 호출했을 때 기존 기본이 이미 해제된 상태가 되면 안 된다.
     const target = this.require(id);
-    for (const item of this.items) {
-      item.setDefaultFlag(item === target);
-    }
+    this.items.forEach((item, index) => {
+      this.items[index] = item.withDefault(item === target);
+    });
   }
 
   private require(id: AddressId): SavedAddress {
