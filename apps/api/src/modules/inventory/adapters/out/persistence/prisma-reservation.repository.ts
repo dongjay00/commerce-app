@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { asPrismaClient } from '../../../../../shared/infrastructure/prisma/prisma-transaction-manager';
-import type { ReservationId } from '../../../../../shared/kernel/identifiers';
+import type { OrderId, ReservationId } from '../../../../../shared/kernel/identifiers';
 import type { TransactionContext } from '../../../../../shared/kernel/ports/transaction-manager';
 import type { ReservationRepository } from '../../../application/ports/out/reservation.repository';
 import type { Reservation } from '../../../domain/reservation';
@@ -12,6 +12,15 @@ export class PrismaReservationRepository implements ReservationRepository {
   async findById(id: ReservationId, tx?: TransactionContext): Promise<Reservation | null> {
     const row = await this.client(tx).reservation.findUnique({ where: { id } });
     return row === null ? null : toReservationDomain(row);
+  }
+
+  async findByOrderId(orderId: OrderId, tx?: TransactionContext): Promise<Reservation[]> {
+    const rows = await this.client(tx).reservation.findMany({
+      where: { orderId },
+      // 순서를 고정한다 — 정렬을 명시하지 않은 SQL의 순서는 계약이 아니다.
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map(toReservationDomain);
   }
 
   async save(reservation: Reservation, tx?: TransactionContext): Promise<void> {

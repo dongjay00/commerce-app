@@ -168,3 +168,28 @@ describe('StockItem.rehydrate', () => {
     );
   });
 });
+
+describe('StockItem.restore', () => {
+  it('확정으로 차감된 보유량을 되돌린다', () => {
+    const stock = StockItem.create({ skuId: SKU, onHand: Quantity.of(10) });
+    stock.reserve(Quantity.of(3));
+    stock.confirm(Quantity.of(3));
+    expect(stock.onHand.value).toBe(7);
+
+    stock.restore(Quantity.of(3));
+
+    expect(stock.onHand.value).toBe(10);
+  });
+
+  it('예약량은 건드리지 않는다', () => {
+    // reserved는 확정 시점에 이미 0으로 내려갔다. 여기서 또 줄이면 음수가 된다.
+    const stock = StockItem.create({ skuId: SKU, onHand: Quantity.of(10) });
+    stock.reserve(Quantity.of(5));
+    stock.confirm(Quantity.of(3));
+
+    stock.restore(Quantity.of(3));
+
+    expect(stock.reserved.value).toBe(2);
+    expect(stock.available.value).toBe(8);
+  });
+});

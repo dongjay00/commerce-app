@@ -25,14 +25,26 @@ import { PessimisticStockRepository } from './adapters/out/persistence/pessimist
 import { PrismaReservationRepository } from './adapters/out/persistence/prisma-reservation.repository';
 import { CONFIRM_RESERVATION_USECASE } from './application/ports/in/confirm-reservation.usecase';
 import {
+  CONFIRM_RESERVATIONS_FOR_ORDER_USECASE,
+  type ConfirmReservationsForOrderUseCase,
+} from './application/ports/in/confirm-reservations-for-order.usecase';
+import {
   EXPIRE_RESERVATIONS_USECASE,
   type ExpireReservationsUseCase,
 } from './application/ports/in/expire-reservations.usecase';
 import { GET_STOCK_QUERY } from './application/ports/in/queries/get-stock.query';
 import { REGISTER_STOCK_USECASE } from './application/ports/in/register-stock.usecase';
 import { RELEASE_RESERVATION_USECASE } from './application/ports/in/release-reservation.usecase';
+import {
+  RELEASE_RESERVATIONS_FOR_ORDER_USECASE,
+  type ReleaseReservationsForOrderUseCase,
+} from './application/ports/in/release-reservations-for-order.usecase';
 import { RESERVE_STOCK_USECASE } from './application/ports/in/reserve-stock.usecase';
 import { RESTOCK_USECASE } from './application/ports/in/restock.usecase';
+import {
+  RESTORE_RESERVATIONS_FOR_ORDER_USECASE,
+  type RestoreReservationsForOrderUseCase,
+} from './application/ports/in/restore-reservations-for-order.usecase';
 import {
   RESERVATION_REPOSITORY,
   type ReservationRepository,
@@ -43,6 +55,7 @@ import { ExpireReservationsService } from './application/services/expire-reserva
 import { GetStockService } from './application/services/get-stock.service';
 import { RegisterStockService } from './application/services/register-stock.service';
 import { ReleaseReservationService } from './application/services/release-reservation.service';
+import { ReservationsForOrderService } from './application/services/reservations-for-order.service';
 import { ReserveStockService } from './application/services/reserve-stock.service';
 import { RestockService } from './application/services/restock.service';
 import { readReservationTtl } from './reservation-ttl.config';
@@ -134,6 +147,39 @@ const RESERVATION_TTL = readReservationTtl(process.env);
       inject: [STOCK_REPOSITORY, TRANSACTION_MANAGER],
     },
     {
+      // 생성자: ReservationsForOrderService(stocks, reservations, transactions, clock)
+      provide: ReservationsForOrderService,
+      useFactory: (
+        stocks: StockRepository,
+        reservations: ReservationRepository,
+        transactions: TransactionManager,
+        clock: Clock,
+      ) => new ReservationsForOrderService(stocks, reservations, transactions, clock),
+      inject: [STOCK_REPOSITORY, RESERVATION_REPOSITORY, TRANSACTION_MANAGER, CLOCK],
+    },
+    {
+      // 메서드 이름이 셋 다 execute일 수는 없으므로 얇은 객체로 감싼다.
+      provide: CONFIRM_RESERVATIONS_FOR_ORDER_USECASE,
+      useFactory: (service: ReservationsForOrderService): ConfirmReservationsForOrderUseCase => ({
+        execute: (command) => service.confirm(command),
+      }),
+      inject: [ReservationsForOrderService],
+    },
+    {
+      provide: RELEASE_RESERVATIONS_FOR_ORDER_USECASE,
+      useFactory: (service: ReservationsForOrderService): ReleaseReservationsForOrderUseCase => ({
+        execute: (command) => service.release(command),
+      }),
+      inject: [ReservationsForOrderService],
+    },
+    {
+      provide: RESTORE_RESERVATIONS_FOR_ORDER_USECASE,
+      useFactory: (service: ReservationsForOrderService): RestoreReservationsForOrderUseCase => ({
+        execute: (command) => service.restore(command),
+      }),
+      inject: [ReservationsForOrderService],
+    },
+    {
       // 생성자: ReservationExpiryScheduler(registry, config, expireReservations)
       provide: ReservationExpiryScheduler,
       useFactory: (
@@ -151,7 +197,14 @@ const RESERVATION_TTL = readReservationTtl(process.env);
       inject: [STOCK_REPOSITORY],
     },
   ],
-  exports: [RESERVE_STOCK_USECASE, CONFIRM_RESERVATION_USECASE, RELEASE_RESERVATION_USECASE],
+  exports: [
+    RESERVE_STOCK_USECASE,
+    CONFIRM_RESERVATION_USECASE,
+    RELEASE_RESERVATION_USECASE,
+    CONFIRM_RESERVATIONS_FOR_ORDER_USECASE,
+    RELEASE_RESERVATIONS_FOR_ORDER_USECASE,
+    RESTORE_RESERVATIONS_FOR_ORDER_USECASE,
+  ],
 })
 export class InventoryModule {
   constructor(registry: DomainErrorRegistry) {

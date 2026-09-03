@@ -5,7 +5,7 @@ import type { Quantity } from '../../../shared/kernel/quantity';
 import { ReservationConflictError } from './stock.errors';
 import { stockReservationExpired } from './stock.events';
 
-export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'RELEASED' | 'EXPIRED';
+export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'RELEASED' | 'EXPIRED' | 'RESTORED';
 
 /**
  * 예약 애그리거트 루트.
@@ -20,12 +20,17 @@ export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'RELEASED' | 'EXPIRED'
  * 않고 `false`를 돌려주며, 유스케이스는 그 값으로 재고 카운터를 또 건드릴지 결정한다.
  * 되돌릴 수 없는 상태에서의 전이는 진짜 충돌이므로 던진다.
  *
- * | 현재 | `confirm` | `release` | `expire` |
- * |---|---|---|---|
- * | PENDING | → CONFIRMED, `true` | → RELEASED, `true` | → EXPIRED, `true` + 이벤트 |
- * | CONFIRMED | `false` (멱등) | **던진다** | `false` |
- * | RELEASED | **던진다** | `false` (멱등) | `false` |
- * | EXPIRED | **던진다** | `false` | `false` |
+ * | 현재 | `confirm` | `release` | `expire` | `restore` |
+ * |---|---|---|---|---|
+ * | PENDING | → CONFIRMED, `true` | → RELEASED, `true` | → EXPIRED, `true` + 이벤트 | **던진다** |
+ * | CONFIRMED | `false` (멱등) | **던진다** | `false` | → RESTORED, `true` |
+ * | RELEASED | **던진다** | `false` (멱등) | `false` | **던진다** |
+ * | EXPIRED | **던진다** | `false` | `false` | **던진다** |
+ * | RESTORED | **던진다** | **던진다** | `false` | `false` (멱등) |
+ *
+ * `RESTORED`는 계획 4가 더한 상태다 — PAID 주문을 취소하면 예약은 이미 `CONFIRMED`이고
+ * 재고는 `onHand`에서 차감됐다. "해제"가 아니라 "되돌리기"이고, 계획 3의 전이표에서
+ * `CONFIRMED`는 종착점이었다.
  */
 export class Reservation extends AggregateRoot {
   private constructor(
@@ -119,6 +124,22 @@ export class Reservation extends AggregateRoot {
     }
     this.statusValue = 'EXPIRED';
     this.raise(stockReservationExpired(this, now));
+    return true;
+  }
+  /**
+   * 확정된 예약을 되돌린다. 호출자가 `StockItem.restore`를 함께 부른다.
+   *
+   * `CONFIRMED`에서만 가능하다. `PENDING` 예약을 복원하려는 것은 사가가 순서를
+   * 잃었다는 뜻이고(확정 전인데 환불이 왔다), 조용히 넘기면 그 사실이 드러나지 않는다.
+   */
+  restore(_now: Date): boolean {
+    if (this.statusValue === 'RESTORED') {
+      return false;
+    }
+    if (this.statusValue !== 'CONFIRMED') {
+      throw new ReservationConflictError(this.id, this.statusValue, 'RESTORED');
+    }
+    this.statusValue = 'RESTORED';
     return true;
   }
 }

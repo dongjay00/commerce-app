@@ -11,13 +11,19 @@ const TTL = Duration.minutes(15);
 
 function aReservation(
   suffix: string,
-  options: { status?: ReservationStatus; ttlMinutes?: number; quantity?: number } = {},
+  options: {
+    status?: ReservationStatus;
+    ttlMinutes?: number;
+    quantity?: number;
+    /** 여러 예약을 한 주문에 묶을 때 쓴다 — `findByOrderId` 케이스가 그것을 필요로 한다. */
+    orderSuffix?: string;
+  } = {},
 ): Reservation {
   const ttl = Duration.minutes(options.ttlMinutes ?? 15);
   const base = Reservation.create({
     id: ReservationId.of(reservationUuid(suffix)),
     skuId: SkuId.of(skuUuid(suffix)),
-    orderId: OrderId.of(orderUuid(suffix)),
+    orderId: OrderId.of(orderUuid(options.orderSuffix ?? suffix)),
     quantity: Quantity.of(options.quantity ?? 3),
     now: FIXED_NOW,
     ttl,
@@ -152,5 +158,45 @@ export function reservationRepositoryContract(
         expect(await repo.findById(reservation.id)).toBeNull();
       },
     );
+
+    it('주문의 예약을 전부 돌려준다', async () => {
+      const repo = await createRepo();
+      await repo.save(aReservation('11', { orderSuffix: '5' }));
+      await repo.save(aReservation('12', { orderSuffix: '5' }));
+
+      const found = await repo.findByOrderId(OrderId.of(orderUuid('5')));
+
+      expect(found.map((r) => r.id).sort()).toEqual(
+        [reservationUuid('11'), reservationUuid('12')].sort(),
+      );
+    });
+
+    it('다른 주문의 예약은 섞이지 않는다', async () => {
+      const repo = await createRepo();
+      await repo.save(aReservation('21', { orderSuffix: '6' }));
+      await repo.save(aReservation('22', { orderSuffix: '7' }));
+
+      const found = await repo.findByOrderId(OrderId.of(orderUuid('6')));
+
+      expect(found.map((r) => r.id)).toEqual([reservationUuid('21')]);
+    });
+
+    it('없는 주문이면 빈 배열이다 — null이 아니다', async () => {
+      const repo = await createRepo();
+      expect(await repo.findByOrderId(OrderId.of(orderUuid('98')))).toEqual([]);
+    });
+
+    it('상태와 무관하게 전부 돌려준다', async () => {
+      // 필터링은 유스케이스의 몫이다. 리포지토리가 PENDING만 주면 확정된 예약을
+      // 복원해야 하는 취소 경로가 아무것도 찾지 못한다.
+      const repo = await createRepo();
+      await repo.save(aReservation('31', { orderSuffix: '8', status: 'CONFIRMED' }));
+      await repo.save(aReservation('32', { orderSuffix: '8' }));
+
+      const found = await repo.findByOrderId(OrderId.of(orderUuid('8')));
+
+      expect(found).toHaveLength(2);
+      expect(found.map((r) => r.status).sort()).toEqual(['CONFIRMED', 'PENDING']);
+    });
   });
 }

@@ -17,15 +17,30 @@ export {
   type ConfirmReservationUseCase,
 } from './application/ports/in/confirm-reservation.usecase';
 export {
+  CONFIRM_RESERVATIONS_FOR_ORDER_USECASE,
+  type ConfirmReservationsForOrderCommand,
+  type ConfirmReservationsForOrderUseCase,
+} from './application/ports/in/confirm-reservations-for-order.usecase';
+export {
   RELEASE_RESERVATION_USECASE,
   type ReleaseReservationCommand,
   type ReleaseReservationUseCase,
 } from './application/ports/in/release-reservation.usecase';
 export {
+  RELEASE_RESERVATIONS_FOR_ORDER_USECASE,
+  type ReleaseReservationsForOrderCommand,
+  type ReleaseReservationsForOrderUseCase,
+} from './application/ports/in/release-reservations-for-order.usecase';
+export {
   RESERVE_STOCK_USECASE,
   type ReserveStockCommand,
   type ReserveStockUseCase,
 } from './application/ports/in/reserve-stock.usecase';
+export {
+  RESTORE_RESERVATIONS_FOR_ORDER_USECASE,
+  type RestoreReservationsForOrderCommand,
+  type RestoreReservationsForOrderUseCase,
+} from './application/ports/in/restore-reservations-for-order.usecase';
 export { InventoryModule } from './inventory.module';
 
 /**

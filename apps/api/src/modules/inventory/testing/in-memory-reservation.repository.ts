@@ -1,4 +1,4 @@
-import type { ReservationId } from '../../../shared/kernel/identifiers';
+import type { OrderId, ReservationId } from '../../../shared/kernel/identifiers';
 import type { TransactionContext } from '../../../shared/kernel/ports/transaction-manager';
 import { Quantity } from '../../../shared/kernel/quantity';
 import type { ReservationRepository } from '../application/ports/out/reservation.repository';
@@ -10,6 +10,12 @@ export class InMemoryReservationRepository implements ReservationRepository {
   async findById(id: ReservationId, _tx?: TransactionContext): Promise<Reservation | null> {
     const stored = this.byId.get(id);
     return stored ? InMemoryReservationRepository.copy(stored) : null;
+  }
+
+  async findByOrderId(orderId: OrderId, _tx?: TransactionContext): Promise<Reservation[]> {
+    return [...this.byId.values()]
+      .filter((reservation) => reservation.orderId === orderId)
+      .map((reservation) => InMemoryReservationRepository.copy(reservation));
   }
 
   async save(reservation: Reservation, _tx?: TransactionContext): Promise<void> {

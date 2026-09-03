@@ -166,3 +166,52 @@ describe('Reservation.rehydrate', () => {
     expect(reservation.hasUncommittedEvents).toBe(false);
   });
 });
+
+describe('Reservation.restore — 계획 4의 확장', () => {
+  it('CONFIRMED 예약을 RESTORED로 되돌린다', () => {
+    // PAID 주문 취소는 "해제"가 아니라 "되돌리기"다 — 재고가 이미 차감됐다.
+    const reservation = pending();
+    reservation.confirm(NOW);
+
+    expect(reservation.restore(NOW)).toBe(true);
+    expect(reservation.status).toBe('RESTORED');
+  });
+
+  it('두 번 복원하면 false다', () => {
+    // OrderCancelled가 at-least-once로 배달된다. 막지 못하면 재고가 두 번 늘어나고
+    // 팔 수 있는 수량이 실제보다 많아져 초과 판매로 이어진다.
+    const reservation = pending();
+    reservation.confirm(NOW);
+    reservation.restore(NOW);
+
+    expect(reservation.restore(NOW)).toBe(false);
+  });
+
+  it('PENDING 예약은 복원할 수 없다', () => {
+    // 확정 전인데 환불이 왔다는 것은 사가가 순서를 잃었다는 뜻이다.
+    expect(() => pending().restore(NOW)).toThrow(ReservationConflictError);
+  });
+
+  it('RELEASED 예약은 복원할 수 없다', () => {
+    const reservation = pending();
+    reservation.release(NOW);
+    expect(() => reservation.restore(NOW)).toThrow(ReservationConflictError);
+  });
+
+  it('RESTORED 예약에 만료가 와도 조용히 false다', () => {
+    // 만료 스캔은 PENDING만 찾으므로 도달하지 않지만, 도달해도 이미 결말이 났다.
+    const reservation = pending();
+    reservation.confirm(NOW);
+    reservation.restore(NOW);
+
+    expect(reservation.expire(NOW)).toBe(false);
+  });
+
+  it('RESTORED 예약은 다시 확정할 수 없다', () => {
+    const reservation = pending();
+    reservation.confirm(NOW);
+    reservation.restore(NOW);
+
+    expect(() => reservation.confirm(NOW)).toThrow(ReservationConflictError);
+  });
+});

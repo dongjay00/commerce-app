@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIRM_RESERVATION_USECASE } from './in/confirm-reservation.usecase';
+import { CONFIRM_RESERVATIONS_FOR_ORDER_USECASE } from './in/confirm-reservations-for-order.usecase';
 import { EXPIRE_RESERVATIONS_USECASE } from './in/expire-reservations.usecase';
 import { GET_STOCK_QUERY } from './in/queries/get-stock.query';
 import { REGISTER_STOCK_USECASE } from './in/register-stock.usecase';
 import { RELEASE_RESERVATION_USECASE } from './in/release-reservation.usecase';
+import { RELEASE_RESERVATIONS_FOR_ORDER_USECASE } from './in/release-reservations-for-order.usecase';
 import { RESERVE_STOCK_USECASE } from './in/reserve-stock.usecase';
 import { RESTOCK_USECASE } from './in/restock.usecase';
+import { RESTORE_RESERVATIONS_FOR_ORDER_USECASE } from './in/restore-reservations-for-order.usecase';
 import { RESERVATION_REPOSITORY } from './out/reservation.repository';
 import { STOCK_REPOSITORY } from './out/stock.repository';
 
@@ -33,6 +36,18 @@ describe('Inventory 포트 토큰', () => {
     { token: REGISTER_STOCK_USECASE, name: 'RegisterStockUseCase' },
     { token: RESTOCK_USECASE, name: 'RestockUseCase' },
     { token: GET_STOCK_QUERY, name: 'GetStockQuery' },
+    {
+      token: CONFIRM_RESERVATIONS_FOR_ORDER_USECASE,
+      name: 'ConfirmReservationsForOrderUseCase',
+    },
+    {
+      token: RELEASE_RESERVATIONS_FOR_ORDER_USECASE,
+      name: 'ReleaseReservationsForOrderUseCase',
+    },
+    {
+      token: RESTORE_RESERVATIONS_FOR_ORDER_USECASE,
+      name: 'RestoreReservationsForOrderUseCase',
+    },
   ];
 
   it.each(tokens)('$name 토큰은 심볼이고 설명이 포트 이름과 정확히 일치한다', ({ token, name }) => {
