@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ADDRESS_ID, aCartDto, anAddressDto, SKU_ID_2 } from '@/shared/api/msw/fixtures';
+import { ADDRESS_ID, aCartDto, anAddressDto, ORDER_ID, SKU_ID_2 } from '@/shared/api/msw/fixtures';
 import { CartView } from './CartView';
 
 describe('CartView', () => {
@@ -66,6 +66,51 @@ describe('CartView', () => {
 
     expect(screen.getByRole('radio', { name: /홍길동/ })).toBeChecked();
     expect(screen.getByRole('radio', { name: /김철수/ })).not.toBeChecked();
+  });
+
+  it('다른 배송지를 고르면 그것이 선택된다', () => {
+    // `onSelect`가 끊겨도 기본 배송지가 남아 주문은 성공하므로 E2E도 이것을 잡지 못한다.
+    const other = anAddressDto({
+      id: `${ADDRESS_ID.slice(0, -1)}2`,
+      recipient: '김철수',
+      isDefault: false,
+    });
+
+    render(<CartView cart={aCartDto()} addresses={[anAddressDto(), other]} onPlaced={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('radio', { name: /김철수/ }));
+
+    expect(screen.getByRole('radio', { name: /김철수/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /홍길동/ })).not.toBeChecked();
+  });
+
+  it('주문하기를 누르면 onPlaced가 결과와 함께 불린다', async () => {
+    // `app/cart/cart-client.tsx`의 `router.push('/orders/{id}')`로 가는 유일한 선이다.
+    // 끊기면 결제까지 끝낸 사용자가 장바구니에 남는다(스펙 §9.10).
+    const onPlaced = vi.fn();
+    render(<CartView cart={aCartDto()} addresses={[anAddressDto()]} onPlaced={onPlaced} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '주문하기' }));
+
+    await waitFor(() =>
+      expect(onPlaced).toHaveBeenCalledWith({ orderId: ORDER_ID, status: 'PAID' }),
+    );
+  });
+
+  it('줄을 빼면 onChanged가 불린다', async () => {
+    const onChanged = vi.fn();
+    render(
+      <CartView
+        cart={aCartDto()}
+        addresses={[anAddressDto()]}
+        onPlaced={vi.fn()}
+        onChanged={onChanged}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '빼기' }));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   });
 
   it('배송지가 없으면 주문 버튼이 disabled다', () => {

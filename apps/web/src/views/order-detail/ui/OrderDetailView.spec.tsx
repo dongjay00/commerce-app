@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { anOrderDto } from '@/shared/api/msw/fixtures';
 import { OrderDetailView } from './OrderDetailView';
@@ -8,6 +8,16 @@ describe('OrderDetailView', () => {
     render(<OrderDetailView order={anOrderDto({ status: 'PAID' })} onCancelled={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: '주문 취소' })).toBeInTheDocument();
+  });
+
+  it('주문 취소를 누르면 onCancelled가 결과와 함께 불린다', async () => {
+    // `app/orders/[orderId]/order-detail-client.tsx`의 `router.refresh()`로 가는 선이다.
+    const onCancelled = vi.fn();
+    render(<OrderDetailView order={anOrderDto({ status: 'PAID' })} onCancelled={onCancelled} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '주문 취소' }));
+
+    await waitFor(() => expect(onCancelled).toHaveBeenCalledWith({ status: 'REFUND_PENDING' }));
   });
 
   it('REFUNDED면 취소 버튼이 보이지 않는다', () => {
