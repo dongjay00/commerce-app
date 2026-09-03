@@ -61,3 +61,16 @@ export class CorruptedStockError extends Error {
     this.name = 'CorruptedStockError';
   }
 }
+
+/**
+ * 그 SKU의 재고 행이 없다. 카탈로그에 SKU는 있는데 재고를 한 번도 등록하지 않은
+ * 경우가 대부분이다. 사용자 입장에서는 살 수 없는 상품이므로 404다.
+ */
+export class StockNotFoundError extends DomainError {
+  static readonly CODE = 'STOCK_NOT_FOUND';
+  readonly code = StockNotFoundError.CODE;
+
+  constructor(skuId: string) {
+    super(`재고를 찾을 수 없습니다: ${skuId}`);
+  }
+}
