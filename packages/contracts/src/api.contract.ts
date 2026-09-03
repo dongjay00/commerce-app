@@ -1,4 +1,5 @@
 import { initContract } from '@ts-rest/core';
+import { productContract } from './catalog/product.contract';
 import { addressContract } from './customer/address.contract';
 import { healthContract } from './health/health.contract';
 import { authContract } from './identity/auth.contract';
@@ -13,4 +14,5 @@ export const apiContract = c.router({
   health: healthContract,
   auth: authContract,
   address: addressContract,
+  product: productContract,
 });

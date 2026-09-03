@@ -3,6 +3,14 @@ import { ApplicationConfig } from '@nestjs/core';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from './app.module';
+import { ProductController } from './modules/catalog/adapters/in/http/product.controller';
+import {
+  DuplicateSkuCodeError,
+  InvalidPriceError,
+  InvalidProductError,
+  ProductNotFoundError,
+  SkuNotFoundError,
+} from './modules/catalog/domain/catalog.errors';
 import { AddressController } from './modules/customer/adapters/in/http/address.controller';
 import { AddressNotFoundError } from './modules/customer/domain/customer.errors';
 import { AuthController } from './modules/identity/adapters/in/http/auth.controller';
@@ -126,6 +134,36 @@ describe('AppModule DI 그래프', () => {
   it('두 컨트롤러가 유스케이스를 주입받는다', () => {
     expect(moduleRef.get(AuthController)).toBeInstanceOf(AuthController);
     expect(moduleRef.get(AddressController)).toBeInstanceOf(AddressController);
+  });
+
+  it('ProductController가 유스케이스를 주입받는다', () => {
+    expect(moduleRef.get(ProductController)).toBeInstanceOf(ProductController);
+  });
+
+  it('catalog 도메인 예외 매핑 다섯 개가 등록되어 있다', () => {
+    // 등록하지 않은 DomainError는 예외를 내지 않는다 — 폴백 {422, DOMAIN_RULE_VIOLATED}로
+    // 조용히 틀린 상태 코드가 나간다.
+    const registry = moduleRef.get(DomainErrorRegistry);
+    expect(registry.resolve(InvalidPriceError.CODE)).toEqual({
+      status: 400,
+      code: ErrorCode.VALIDATION_FAILED,
+    });
+    expect(registry.resolve(InvalidProductError.CODE)).toEqual({
+      status: 400,
+      code: ErrorCode.VALIDATION_FAILED,
+    });
+    expect(registry.resolve(DuplicateSkuCodeError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    });
+    expect(registry.resolve(SkuNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
+    expect(registry.resolve(ProductNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
   });
 
   it('identity·customer 도메인 예외 매핑이 모두 등록되어 있다', () => {
