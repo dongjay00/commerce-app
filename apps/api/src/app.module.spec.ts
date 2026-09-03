@@ -3,11 +3,30 @@ import { ApplicationConfig } from '@nestjs/core';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from './app.module';
+import { ProductController } from './modules/catalog/adapters/in/http/product.controller';
+import {
+  DuplicateSkuCodeError,
+  InvalidPriceError,
+  InvalidProductError,
+  ProductNotFoundError,
+  SkuNotFoundError,
+} from './modules/catalog/domain/catalog.errors';
 import { AddressController } from './modules/customer/adapters/in/http/address.controller';
 import { AddressNotFoundError } from './modules/customer/domain/customer.errors';
 import { AuthController } from './modules/identity/adapters/in/http/auth.controller';
 import { EmailAlreadyRegisteredError } from './modules/identity/domain/account.errors';
 import { SessionRevokedError } from './modules/identity/domain/session.errors';
+import { StockController } from './modules/inventory/adapters/in/http/stock.controller';
+import { ReservationExpiryScheduler } from './modules/inventory/adapters/in/scheduler/reservation-expiry.scheduler';
+import { PessimisticStockRepository } from './modules/inventory/adapters/out/persistence/pessimistic-stock.repository';
+import { STOCK_REPOSITORY } from './modules/inventory/application/ports/out/stock.repository';
+import {
+  InsufficientStockError,
+  ReservationNotFoundError,
+  StockAlreadyExistsError,
+  StockContentionError,
+  StockNotFoundError,
+} from './modules/inventory/domain/stock.errors';
 import { JwtTokenService } from './shared/infrastructure/auth/jwt-token.service';
 import { AccessTokenGuard } from './shared/infrastructure/http/access-token.guard';
 import { DomainErrorRegistry } from './shared/infrastructure/http/domain-error.registry';
@@ -16,7 +35,12 @@ import { HealthController } from './shared/infrastructure/http/health.controller
 import { UnauthenticatedError } from './shared/infrastructure/http/unauthenticated.error';
 import { ValidationFailedError } from './shared/infrastructure/http/zod-validation.pipe';
 import { OutboxRelay } from './shared/infrastructure/outbox/outbox-relay';
+import { OutboxRelayScheduler } from './shared/infrastructure/outbox/outbox-relay.scheduler';
 import { PrismaService } from './shared/infrastructure/prisma/prisma.service';
+import {
+  SCHEDULER_CONFIG,
+  type SchedulerConfig,
+} from './shared/infrastructure/scheduler/scheduler.config';
 import { InvalidIdError } from './shared/kernel/identifiers';
 import { ACCESS_TOKEN_VERIFIER } from './shared/kernel/ports/access-token-verifier';
 import { CLOCK } from './shared/kernel/ports/clock';
@@ -103,6 +127,56 @@ describe('AppModule DI 그래프', () => {
     });
   });
 
+  it('Inventory 예외 매핑이 등록되어 있다', () => {
+    // 등록하지 않은 DomainError는 폴백 {422, DOMAIN_RULE_VIOLATED}로 조용히 떨어진다 —
+    // 예외가 나지 않고 틀린 상태 코드가 나간다. 조립된 레지스트리를 직접 resolve하는
+    // 이 테스트만이 그 회귀를 잡는다.
+    const registry = moduleRef.get(DomainErrorRegistry);
+    expect(registry.resolve(InsufficientStockError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.INSUFFICIENT_STOCK,
+    });
+    expect(registry.resolve(StockNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
+    expect(registry.resolve(StockContentionError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    });
+    expect(registry.resolve(StockAlreadyExistsError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    });
+    expect(registry.resolve(ReservationNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
+  });
+
+  it('StockController가 유스케이스를 주입받는다', () => {
+    expect(moduleRef.get(StockController)).toBeInstanceOf(StockController);
+  });
+
+  it('STOCK_REPOSITORY가 비관적 어댑터로 해석된다', () => {
+    // 스펙 §6.4가 정한 기본 전략이다. 낙관적으로 바꿔도 모든 테스트가 통과하므로
+    // (태스크 14의 프루브 a), 어느 쪽이 배선되어 있는지는 이 단언만이 고정한다.
+    expect(moduleRef.get(STOCK_REPOSITORY)).toBeInstanceOf(PessimisticStockRepository);
+  });
+
+  it('두 스케줄러가 배선되어 있다', () => {
+    // 계획 1 이후 OutboxRelay에 프로덕션 호출자가 없었다 — 이벤트가 outbox에
+    // 쌓이기만 하고 아무 데도 도착하지 않았다. 이 단언이 그 회귀를 막는다.
+    expect(moduleRef.get(OutboxRelayScheduler)).toBeInstanceOf(OutboxRelayScheduler);
+    expect(moduleRef.get(ReservationExpiryScheduler)).toBeInstanceOf(ReservationExpiryScheduler);
+  });
+
+  it('테스트 환경에서는 스케줄러가 꺼져 있다', () => {
+    // apps/api/.env의 SCHEDULERS_ENABLED=false가 실제로 도달하는지 확인한다.
+    // 켜져 있으면 배경 폴링이 통합 테스트의 TRUNCATE와 경합한다.
+    expect(moduleRef.get<SchedulerConfig>(SCHEDULER_CONFIG).enabled).toBe(false);
+  });
+
   it('AccessTokenGuard가 해석되고 검증기를 주입받는다', () => {
     expect(moduleRef.get(AccessTokenGuard)).toBeInstanceOf(AccessTokenGuard);
   });
@@ -126,6 +200,36 @@ describe('AppModule DI 그래프', () => {
   it('두 컨트롤러가 유스케이스를 주입받는다', () => {
     expect(moduleRef.get(AuthController)).toBeInstanceOf(AuthController);
     expect(moduleRef.get(AddressController)).toBeInstanceOf(AddressController);
+  });
+
+  it('ProductController가 유스케이스를 주입받는다', () => {
+    expect(moduleRef.get(ProductController)).toBeInstanceOf(ProductController);
+  });
+
+  it('catalog 도메인 예외 매핑 다섯 개가 등록되어 있다', () => {
+    // 등록하지 않은 DomainError는 예외를 내지 않는다 — 폴백 {422, DOMAIN_RULE_VIOLATED}로
+    // 조용히 틀린 상태 코드가 나간다.
+    const registry = moduleRef.get(DomainErrorRegistry);
+    expect(registry.resolve(InvalidPriceError.CODE)).toEqual({
+      status: 400,
+      code: ErrorCode.VALIDATION_FAILED,
+    });
+    expect(registry.resolve(InvalidProductError.CODE)).toEqual({
+      status: 400,
+      code: ErrorCode.VALIDATION_FAILED,
+    });
+    expect(registry.resolve(DuplicateSkuCodeError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    });
+    expect(registry.resolve(SkuNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
+    expect(registry.resolve(ProductNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
   });
 
   it('identity·customer 도메인 예외 매핑이 모두 등록되어 있다', () => {

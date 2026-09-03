@@ -115,3 +115,40 @@ describe('기본 배송지 부분 유니크 인덱스가 DB 수준에서 강제�
     ).resolves.toBeUndefined();
   });
 });
+
+describe('예약 만료 스캔 인덱스', () => {
+  // 부분 인덱스는 아니지만 만료 스케줄러가 전역 스캔에 쓰는 유일한 진입점이다
+  // (스펙 §10.8). 사라져도 기능 테스트는 전부 통과하고 스캔만 느려진다 —
+  // 정확히 이 감시가 존재하는 이유다.
+
+  it('reservations_expires_at_idx가 존재한다', async () => {
+    const def = await indexDefinition('reservations_expires_at_idx');
+    expect(def).not.toBeNull();
+    expect(def).toContain('expires_at');
+  });
+
+  it('만료 스캔 쿼리가 순차 스캔이 아니라 인덱스를 탄다', async () => {
+    // 인덱스가 "존재한다"와 "쓰인다"는 다른 명제다. 이 쿼리는
+    // PrismaReservationRepository.findExpired가 내는 것과 같은 모양이어야 한다 —
+    // 계획 2에서 프루브가 실제 쿼리와 달라 Important 지적을 받았다.
+    const db = await testDb();
+
+    await db.$executeRawUnsafe(`
+      INSERT INTO reservations (id, sku_id, order_id, quantity, status, expires_at, created_at)
+      SELECT gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 1, 'PENDING',
+             now() + (n || ' seconds')::interval, now()
+        FROM generate_series(1, 5000) AS n
+    `);
+    await db.$executeRawUnsafe('ANALYZE reservations');
+
+    const plan = await db.$queryRawUnsafe<Array<{ 'QUERY PLAN': string }>>(`
+      EXPLAIN SELECT id FROM reservations
+        WHERE status = 'PENDING' AND expires_at <= now()
+        ORDER BY expires_at ASC
+        LIMIT 100
+    `);
+    const planText = plan.map((row) => row['QUERY PLAN']).join('\n');
+
+    expect(planText).toContain('reservations_expires_at_idx');
+  });
+});

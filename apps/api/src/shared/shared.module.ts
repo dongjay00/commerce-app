@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule, SchedulerRegistry } from '@nestjs/schedule';
 import { readJwtConfig } from './infrastructure/auth/jwt.config';
 import { JwtTokenService } from './infrastructure/auth/jwt-token.service';
 import { SystemClock } from './infrastructure/clock/system-clock';
@@ -12,8 +13,14 @@ import { UuidV7Generator } from './infrastructure/id/uuid-v7.generator';
 import { NestEventEmitterTransport } from './infrastructure/messaging/nest-event-emitter.transport';
 import { OutboxEventPublisher } from './infrastructure/outbox/outbox-event.publisher';
 import { OutboxRelay } from './infrastructure/outbox/outbox-relay';
+import { OutboxRelayScheduler } from './infrastructure/outbox/outbox-relay.scheduler';
 import { PrismaService } from './infrastructure/prisma/prisma.service';
 import { PrismaTransactionManager } from './infrastructure/prisma/prisma-transaction-manager';
+import {
+  readSchedulerConfig,
+  SCHEDULER_CONFIG,
+  type SchedulerConfig,
+} from './infrastructure/scheduler/scheduler.config';
 import { ACCESS_TOKEN_VERIFIER } from './kernel/ports/access-token-verifier';
 import { CLOCK, type Clock } from './kernel/ports/clock';
 import { DOMAIN_EVENT_PUBLISHER } from './kernel/ports/domain-event.publisher';
@@ -23,7 +30,7 @@ import { TRANSACTION_MANAGER } from './kernel/ports/transaction-manager';
 
 @Global()
 @Module({
-  imports: [EventEmitterModule.forRoot()],
+  imports: [EventEmitterModule.forRoot(), ScheduleModule.forRoot()],
   providers: [
     PrismaService,
     {
@@ -66,10 +73,21 @@ import { TRANSACTION_MANAGER } from './kernel/ports/transaction-manager';
       useFactory: () => new JwtTokenService(readJwtConfig(process.env)),
     },
     { provide: ACCESS_TOKEN_VERIFIER, useExisting: JwtTokenService },
+    // SchedulerConfig도 인터페이스라 DI로 해석할 수 없다. 잘못된 주기는 여기서
+    // 부팅을 실패시킨다.
+    { provide: SCHEDULER_CONFIG, useFactory: () => readSchedulerConfig(process.env) },
+    {
+      // 생성자: OutboxRelayScheduler(registry, config, relay)
+      provide: OutboxRelayScheduler,
+      useFactory: (registry: SchedulerRegistry, config: SchedulerConfig, relay: OutboxRelay) =>
+        new OutboxRelayScheduler(registry, config, relay),
+      inject: [SchedulerRegistry, SCHEDULER_CONFIG, OutboxRelay],
+    },
     AccessTokenGuard,
   ],
   exports: [
     PrismaService,
+    SCHEDULER_CONFIG,
     DomainErrorRegistry,
     OutboxRelay,
     CLOCK,
