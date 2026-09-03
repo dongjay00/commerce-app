@@ -38,9 +38,12 @@ export class InMemoryPaymentRepository implements PaymentRepository {
       orderId: payment.orderId,
       amount: payment.amount,
       status: payment.status,
-      attempts: payment.attempts.map(
-        (a) => new PaymentAttempt(a.id, a.pgTxId, a.result, a.reason, a.attemptedAt),
-      ),
+      // attemptedAt 오름차순으로 돌려준다 — 계약이 요구하는 순서이고, Prisma
+      // 어댑터는 `orderBy`로 같은 것을 한다. 삽입 순서를 그대로 두면 두 구현의
+      // 관측 가능한 동작이 갈라진다.
+      attempts: [...payment.attempts]
+        .sort((left, right) => left.attemptedAt.getTime() - right.attemptedAt.getTime())
+        .map((a) => new PaymentAttempt(a.id, a.pgTxId, a.result, a.reason, a.attemptedAt)),
     });
   }
 }

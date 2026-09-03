@@ -62,13 +62,13 @@ export function paymentRepositoryContract(
       expect(found?.status).toBe('AUTHORIZED');
     });
 
-    it('시도 이력이 저장되고 순서가 유지된다', async () => {
+    it('시도 이력이 저장되고 attemptedAt 오름차순으로 복원된다', async () => {
       // 이력이 사라지면 웹훅 멱등성의 근거가 사라진다.
+      //
+      // **나중 시각을 먼저 넣는다.** 삽입 순서와 시각 순서를 같게 두면 정렬을
+      // 지워도 통과해 이 테스트가 아무것도 검증하지 못한다 — 실측으로 확인했다.
       const repo = await createRepo();
       const payment = open('4');
-      payment.recordCallback(
-        new PaymentAttempt(attemptUuid('41'), 'pg-41', 'DECLINED', '한도 초과', FIXED_NOW),
-      );
       payment.recordCallback(
         new PaymentAttempt(
           attemptUuid('42'),
@@ -77,6 +77,9 @@ export function paymentRepositoryContract(
           null,
           new Date(FIXED_NOW.getTime() + 1000),
         ),
+      );
+      payment.recordCallback(
+        new PaymentAttempt(attemptUuid('41'), 'pg-41', 'DECLINED', '한도 초과', FIXED_NOW),
       );
       await repo.save(payment);
 
