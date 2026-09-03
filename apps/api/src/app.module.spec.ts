@@ -27,6 +27,13 @@ import {
   StockContentionError,
   StockNotFoundError,
 } from './modules/inventory/domain/stock.errors';
+import { PgWebhookController } from './modules/payment/adapters/in/http/pg-webhook.controller';
+import { FakePgAdapter } from './modules/payment/adapters/out/pg/fake-pg.adapter';
+import { PG_CLIENT } from './modules/payment/application/ports/out/pg-client';
+import {
+  PaymentConflictError,
+  PaymentNotFoundError,
+} from './modules/payment/domain/payment.errors';
 import { JwtTokenService } from './shared/infrastructure/auth/jwt-token.service';
 import { AccessTokenGuard } from './shared/infrastructure/http/access-token.guard';
 import { DomainErrorRegistry } from './shared/infrastructure/http/domain-error.registry';
@@ -175,6 +182,28 @@ describe('AppModule DI 그래프', () => {
     // apps/api/.env의 SCHEDULERS_ENABLED=false가 실제로 도달하는지 확인한다.
     // 켜져 있으면 배경 폴링이 통합 테스트의 TRUNCATE와 경합한다.
     expect(moduleRef.get<SchedulerConfig>(SCHEDULER_CONFIG).enabled).toBe(false);
+  });
+
+  it('PgWebhookController가 해석된다', () => {
+    expect(moduleRef.get(PgWebhookController)).toBeInstanceOf(PgWebhookController);
+  });
+
+  it('PG_CLIENT와 FakePgAdapter가 같은 인스턴스다', () => {
+    // useExisting이 실제로 동작하는지. 새 인스턴스가 만들어지면 E2E가 바꾼
+    // scenario가 실제 결제 경로에 도달하지 않고, 보상 E2E가 조용히 승인 경로를 돈다.
+    expect(moduleRef.get(PG_CLIENT)).toBe(moduleRef.get(FakePgAdapter));
+  });
+
+  it('Payment 예외 매핑이 등록되어 있다', () => {
+    const registry = moduleRef.get(DomainErrorRegistry);
+    expect(registry.resolve(PaymentConflictError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    });
+    expect(registry.resolve(PaymentNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
   });
 
   it('AccessTokenGuard가 해석되고 검증기를 주입받는다', () => {
