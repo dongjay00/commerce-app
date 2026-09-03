@@ -1,7 +1,7 @@
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { server } from '../shared/api/msw/server';
-import { createApiClient, SessionExpiredError } from './api-client';
+import { authedFetch, createApiClient, SessionExpiredError } from './api-client';
 import { InMemoryTokenStore } from './testing/in-memory-token-store';
 
 const BASE = 'http://api.test';
@@ -159,6 +159,41 @@ describe('createApiClient', () => {
     const store = new InMemoryTokenStore({ accessToken: 'access-1', refreshToken: 'refresh-1' });
 
     await expect(createApiClient(BASE, store).address.list()).rejects.toThrow(SessionExpiredError);
+    expect(store.clearCalls).toBe(1);
+  });
+});
+
+describe('authedFetch', () => {
+  // createAuthenticatedApi와 같은 401 재시도 규칙을 갖는지 확인한다 —
+  // 두 함수가 시그니처만 다를 뿐 갈라지면 안 된다.
+  it('401이면 갱신하고 새 토큰으로 정확히 한 번 재시도한다', async () => {
+    addressesReturning(401, 200);
+    refreshReturning(200);
+    const store = new InMemoryTokenStore({ accessToken: 'access-1', refreshToken: 'refresh-1' });
+
+    const response = await authedFetch(BASE, store)('/addresses');
+
+    expect(response.status).toBe(200);
+    expect(refreshCalls).toBe(1);
+    expect(seenAuthorization).toEqual(['Bearer access-1', 'Bearer access-2']);
+  });
+
+  it('갱신에 실패하면 세션을 지우고 SessionExpiredError를 던진다', async () => {
+    addressesReturning(401);
+    refreshReturning(401);
+    const store = new InMemoryTokenStore({ accessToken: 'access-1', refreshToken: 'refresh-1' });
+
+    await expect(authedFetch(BASE, store)('/addresses')).rejects.toThrow(SessionExpiredError);
+    expect(store.clearCalls).toBe(1);
+  });
+
+  it('갱신 후에도 401이면 세션을 폐기한다', async () => {
+    addressesReturning(401, 401);
+    refreshReturning(200);
+    const store = new InMemoryTokenStore({ accessToken: 'access-1', refreshToken: 'refresh-1' });
+
+    await expect(authedFetch(BASE, store)('/addresses')).rejects.toThrow(SessionExpiredError);
+    expect(refreshCalls).toBe(1);
     expect(store.clearCalls).toBe(1);
   });
 });

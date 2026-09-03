@@ -100,6 +100,54 @@ export function createAuthenticatedApi(baseUrl: string, store: TokenStore): ApiF
   };
 }
 
+/**
+ * 토큰 주입 + 401 시 갱신 후 **정확히 1회** 재시도를 담은 `fetch`(스펙 §8.5).
+ * Route Handler용 action들이 쓴다.
+ *
+ * `createAuthenticatedApi`(ts-rest의 `ApiFetcher`)와 같은 로직이지만 시그니처가
+ * `fetch`에 가깝다 — action은 계약의 라우트 이름이 아니라 경로와 본문만 알면 된다.
+ * 두 함수가 같은 규칙을 갖는 한 401 재시도 테스트가 **양쪽에 다 있어야 한다.**
+ */
+export function authedFetch(baseUrl: string, store: TokenStore) {
+  return async (path: string, init: RequestInit = {}): Promise<Response> => {
+    const tokens = await store.read();
+    if (tokens === null) {
+      throw new SessionExpiredError('세션이 없습니다.');
+    }
+
+    const send = (accessToken: string) =>
+      fetch(`${baseUrl}${path}`, {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          ...init.headers,
+          authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+    const first = await send(tokens.accessToken);
+    if (first.status !== 401) {
+      return first;
+    }
+
+    // 401이 아닌 오류(500 등)에는 갱신하지 않는다 — 멀쩡한 리프레시 토큰을
+    // 회전시켜 태울 이유가 없다.
+    const refreshed = await refreshTokens(baseUrl, tokens.refreshToken);
+    if (refreshed === null) {
+      await store.clear();
+      throw new SessionExpiredError('세션 갱신에 실패했습니다.');
+    }
+    await store.write(refreshed);
+
+    const second = await send(refreshed.accessToken);
+    if (second.status === 401) {
+      await store.clear();
+      throw new SessionExpiredError('갱신 후에도 인증에 실패했습니다.');
+    }
+    return second;
+  };
+}
+
 export function createApiClient(baseUrl: string, store: TokenStore) {
   return createContractClient(baseUrl, createAuthenticatedApi(baseUrl, store));
 }
