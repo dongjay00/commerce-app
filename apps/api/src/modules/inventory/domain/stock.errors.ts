@@ -87,3 +87,19 @@ export class ReservationNotFoundError extends DomainError {
     super(`예약을 찾을 수 없습니다: ${reservationId}`);
   }
 }
+
+/**
+ * 낙관적 락이 재시도 한도 안에 성공하지 못했다. **낙관적 어댑터에만 존재한다** —
+ * 비관적 어댑터는 잠금을 기다리므로 이런 실패가 없다. 두 어댑터의 예외 표면이
+ * 다른 것이 두 전략의 차이가 드러나는 자리다.
+ *
+ * 사용자가 다시 시도하면 성공할 수 있는 일시적 경합이므로 `DomainError`이고 409다.
+ */
+export class StockContentionError extends DomainError {
+  static readonly CODE = 'STOCK_CONTENTION';
+  readonly code = StockContentionError.CODE;
+
+  constructor(skuId: string, attempts: number) {
+    super(`재고 경합으로 ${attempts}회 재시도 후 실패했습니다: ${skuId}`);
+  }
+}
