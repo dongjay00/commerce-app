@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIRM_RESERVATION_USECASE } from './in/confirm-reservation.usecase';
+import { EXPIRE_RESERVATIONS_USECASE } from './in/expire-reservations.usecase';
 import { RELEASE_RESERVATION_USECASE } from './in/release-reservation.usecase';
 import { RESERVE_STOCK_USECASE } from './in/reserve-stock.usecase';
 import { RESERVATION_REPOSITORY } from './out/reservation.repository';
@@ -25,6 +26,7 @@ describe('Inventory 포트 토큰', () => {
     { token: RESERVE_STOCK_USECASE, name: 'ReserveStockUseCase' },
     { token: CONFIRM_RESERVATION_USECASE, name: 'ConfirmReservationUseCase' },
     { token: RELEASE_RESERVATION_USECASE, name: 'ReleaseReservationUseCase' },
+    { token: EXPIRE_RESERVATIONS_USECASE, name: 'ExpireReservationsUseCase' },
   ];
 
   it.each(tokens)('$name 토큰은 심볼이고 설명이 포트 이름과 정확히 일치한다', ({ token, name }) => {
