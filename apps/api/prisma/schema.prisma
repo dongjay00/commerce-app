@@ -93,3 +93,70 @@ model SavedAddress {
   @@index([customerId])
   @@map("saved_addresses")
 }
+
+/// catalog 컨텍스트의 상품. status 전이 유스케이스는 계획 3에 없다 —
+/// 'ARCHIVED'는 검색 필터가 걸러내는지 확인하는 데 쓰인다.
+model Product {
+  id        String   @id @db.Uuid
+  name      String
+  status    String
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  skus      Sku[]
+
+  @@map("products")
+}
+
+/// Product 애그리거트 **안**의 엔티티. 상품이 사라지면 함께 사라진다.
+/// (product_id, code) 유니크는 "한 상품 안에서 SKU 코드는 유일하다"는
+/// 도메인 불변식의 마지막 방어선이다 — 동시 등록은 도메인만으로 막을 수 없다.
+model Sku {
+  id            String  @id @db.Uuid
+  productId     String  @map("product_id") @db.Uuid
+  code          String
+  priceAmount   BigInt  @map("price_amount")
+  priceCurrency String  @map("price_currency")
+  product       Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, code])
+  @@index([productId])
+  @@map("skus")
+}
+
+/// inventory 컨텍스트의 재고. SKU당 한 행이라 sku_id가 PK다.
+///
+/// sku_id에 외래 키를 걸지 않는다 — StockItem과 Sku는 서로 다른 컨텍스트의
+/// 애그리거트 루트이고 생명주기가 독립적이다(스펙 §5.1). 계획 2가
+/// sessions.account_id에 같은 판단을 했다.
+///
+/// version은 **낙관적 락 어댑터 전용**이다. 비관적 어댑터는 이 컬럼을 읽지도
+/// 쓰지도 않는다 — 그래야 두 어댑터를 같은 스키마 위에서 비교할 수 있다.
+model StockItem {
+  skuId    String @id @map("sku_id") @db.Uuid
+  onHand   Int    @map("on_hand")
+  reserved Int
+  version  Int    @default(0)
+
+  @@map("stock_items")
+}
+
+/// 예약. **StockItem 안이 아니라 자기 애그리거트 루트다** — 만료 스케줄러가
+/// expires_at으로 SKU를 가로질러 전역 스캔해야 하기 때문이다(스펙 §10.8).
+/// stock_items.reserved는 같은 트랜잭션에서 함께 갱신되는 비정규화 카운터다.
+///
+/// order_id에 외래 키가 없다: orders 테이블은 계획 4까지 존재하지 않고,
+/// Order와 Reservation은 다른 컨텍스트의 애그리거트 루트다.
+model Reservation {
+  id        String   @id @db.Uuid
+  skuId     String   @map("sku_id") @db.Uuid
+  orderId   String   @map("order_id") @db.Uuid
+  quantity  Int
+  status    String
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+
+  /// TTL 자가치유가 이 인덱스를 스캔한다(스펙 §6.2의 5단계).
+  @@index([expiresAt], map: "reservations_expires_at_idx")
+  @@index([skuId])
+  @@index([orderId])
+  @@map("reservations")
+}
