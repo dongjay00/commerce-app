@@ -6,6 +6,10 @@ import {
   EXPIRE_RESERVATIONS_USECASE,
   type ExpireReservationsUseCase,
 } from '../../src/modules/inventory/application/ports/in/expire-reservations.usecase';
+import {
+  RESERVE_STOCK_USECASE,
+  type ReserveStockUseCase,
+} from '../../src/modules/inventory/application/ports/in/reserve-stock.usecase';
 import { FakePgAdapter } from '../../src/modules/payment/adapters/out/pg/fake-pg.adapter';
 import { OutboxRelay } from '../../src/shared/infrastructure/outbox/outbox-relay';
 import { PrismaService } from '../../src/shared/infrastructure/prisma/prisma.service';
@@ -213,6 +217,34 @@ export class SagaHarness {
       where: { orderId },
       data: { expiresAt: new Date(Date.now() - 60_000) },
     });
+  }
+
+  /**
+   * 예약만 직접 잡는다 — **"보상이 돌기 전에 프로세스가 죽었다"를 재현하는 도구다.**
+   *
+   * HTTP 경로로는 이 상태를 만들 수 없다: `PlaceOrderService`가 PG 실패 시 예약을
+   * 반드시 풀기 때문이다. TTL 자가치유(스펙 §6.2의 5단계)는 바로 그 보상이 돌지
+   * 못한 경우를 위한 그물이고, 그 상황을 만들려면 사가를 중간에 끊어야 한다.
+   *
+   * 원시 SQL이 아니라 유스케이스를 쓴다 — 매퍼와 재고 카운터를 함께 지나가야
+   * 만료 스캔이 실제 데이터를 보게 된다.
+   */
+  async reserveDirectly(orderId: string, skuId: string, quantity: number): Promise<string> {
+    const result = await this.app
+      .get<ReserveStockUseCase>(RESERVE_STOCK_USECASE)
+      .execute({ orderId, skuId, quantity });
+    return result.reservationId;
+  }
+
+  /**
+   * 전송에 실패해 재시도 대기 중인 outbox 행 수.
+   *
+   * `drainOutbox`는 실패를 조용히 넘긴다 — `OutboxRelay`가 전송 실패를 `attempts`
+   * 증가 + 백오프로 다루기 때문이다(계획 1의 poison-tolerance). 그래서 구독자가
+   * 던져도 E2E는 아무것도 눈치채지 못한다. 이 값을 단언해야 그 침묵이 깨진다.
+   */
+  async failedOutboxCount(): Promise<number> {
+    return this.app.get(PrismaService).outbox.count({ where: { attempts: { gt: 0 } } });
   }
 
   /** 만료 스캔을 한 번 돌린다. 스케줄러는 테스트에서 꺼져 있다(계획 3). */

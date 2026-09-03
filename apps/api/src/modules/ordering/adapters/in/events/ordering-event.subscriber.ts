@@ -28,13 +28,13 @@ export class OrderingEventSubscriber {
     private readonly onExpired: HandleStockReservationExpiredUseCase,
   ) {}
 
-  @OnEvent('payment.PaymentRefunded')
+  @OnEvent('payment.PaymentRefunded', { suppressErrors: false })
   async onPaymentRefunded(record: OutboxRecord): Promise<void> {
     const orderId = requireString(record.payload, 'orderId', record.eventType);
     this.log(record.eventType, orderId, await this.onRefunded.execute({ orderId }));
   }
 
-  @OnEvent('inventory.StockReservationExpired')
+  @OnEvent('inventory.StockReservationExpired', { suppressErrors: false })
   async onStockReservationExpired(record: OutboxRecord): Promise<void> {
     // 계획 3의 `stock.events.ts`가 payload에 orderId를 담았다.
     const orderId = requireString(record.payload, 'orderId', record.eventType);

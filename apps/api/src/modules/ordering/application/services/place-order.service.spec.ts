@@ -215,6 +215,33 @@ describe('PlaceOrderService — 재고 예약 실패와 보상', () => {
     expect(inventory.released).toEqual(['reservation-1']);
   });
 
+  it('예약이 실패하면 주문이 PAYMENT_FAILED로 끝난다', async () => {
+    // 이것이 없으면 주문이 PENDING_PAYMENT로 영원히 남는다 — 장바구니는 이미
+    // 지워졌고 TTL 스캔은 예약을 훑는데 예약이 없으므로 아무도 끝내지 않는다.
+    // 사가 E2E가 이 결함을 찾았고, 단위 테스트는 잡지 못했다.
+    const { service, orders, inventory } = await build();
+    inventory.failFor(SkuId.of(SKU_A));
+
+    await place(service).catch(() => undefined);
+
+    const all = await orders.listByCustomer(CustomerId.of(CUSTOMER), { limit: 10, offset: 0 });
+    expect(all).toHaveLength(1);
+    expect(all[0]?.status).toBe('PAYMENT_FAILED');
+  });
+
+  it('예약 실패도 OrderPaymentFailed를 발행한다', async () => {
+    // 인라인 해제가 실패했을 때 이 이벤트가 두 번째 기회다.
+    const { service, events, inventory } = await build();
+    inventory.failFor(SkuId.of(SKU_A));
+
+    await place(service).catch(() => undefined);
+
+    expect(events.published.map((e) => e.eventType)).toEqual([ORDER_PLACED, ORDER_PAYMENT_FAILED]);
+    expect(events.published[1]?.payload).toMatchObject({
+      reason: expect.stringContaining('재고가 부족합니다'),
+    });
+  });
+
   it('예약이 실패하면 결제하지 않는다', async () => {
     const { service, inventory, payments } = await build();
     inventory.failFor(SkuId.of(SKU_A));

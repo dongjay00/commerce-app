@@ -29,6 +29,12 @@ import {
  *
  * 던지면 릴레이가 재시도한다. 이미 처리된 이벤트(처리 건수 0)에는 **던지지 않는다** —
  * 던지면 그 이벤트가 데드레터에 도달할 때까지 outbox의 head-of-line을 차지한다.
+ *
+ * **`{ suppressErrors: false }`가 필수다.** `@OnEvent`의 기본값은 `true`이고, 그러면
+ * Nest가 리스너 예외를 삼켜 `emitAsync`가 정상 완료로 보인다 — 릴레이는 전송에
+ * 성공했다고 판단해 `published_at`을 채우고, 실패한 이벤트가 영영 사라진다.
+ * 재시도·백오프·데드레터가 전부 죽은 코드가 되는 것이다. 사가 E2E의 프루브 (c)가
+ * 이 결함을 찾았다 — 그 전까지 모든 단위 테스트와 E2E가 통과하고 있었다.
  */
 @Injectable()
 export class InventoryEventSubscriber {
@@ -43,19 +49,19 @@ export class InventoryEventSubscriber {
     private readonly restoreForOrder: RestoreReservationsForOrderUseCase,
   ) {}
 
-  @OnEvent('ordering.OrderPaid')
+  @OnEvent('ordering.OrderPaid', { suppressErrors: false })
   async onOrderPaid(record: OutboxRecord): Promise<void> {
     const orderId = requireString(record.payload, 'orderId', record.eventType);
     this.log(record.eventType, orderId, await this.confirmForOrder.execute({ orderId }));
   }
 
-  @OnEvent('ordering.OrderPaymentFailed')
+  @OnEvent('ordering.OrderPaymentFailed', { suppressErrors: false })
   async onOrderPaymentFailed(record: OutboxRecord): Promise<void> {
     const orderId = requireString(record.payload, 'orderId', record.eventType);
     this.log(record.eventType, orderId, await this.releaseForOrder.execute({ orderId }));
   }
 
-  @OnEvent('ordering.OrderCancelled')
+  @OnEvent('ordering.OrderCancelled', { suppressErrors: false })
   async onOrderCancelled(record: OutboxRecord): Promise<void> {
     const orderId = requireString(record.payload, 'orderId', record.eventType);
     // 결제 전 취소면 예약은 아직 PENDING이라 해제, 결제 후면 CONFIRMED라 복원이다.

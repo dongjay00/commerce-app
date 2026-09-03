@@ -29,7 +29,7 @@ export class PaymentEventSubscriber {
     @Inject(REFUND_PAYMENT_USECASE) private readonly refundPayment: RefundPaymentUseCase,
   ) {}
 
-  @OnEvent('ordering.OrderCancelled')
+  @OnEvent('ordering.OrderCancelled', { suppressErrors: false })
   async onOrderCancelled(record: OutboxRecord): Promise<void> {
     const orderId = requireString(record.payload, 'orderId', record.eventType);
     const wasPaid = requireBoolean(record.payload, 'wasPaid', record.eventType);

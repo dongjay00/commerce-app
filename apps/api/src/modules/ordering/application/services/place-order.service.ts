@@ -166,15 +166,45 @@ export class PlaceOrderService implements PlaceOrderUseCase {
         continue;
       }
       await this.releaseAll(acquired);
+
+      // 주문을 실패로 끝낸다. **이것이 없으면 주문이 PENDING_PAYMENT로 영원히 남는다** —
+      // 장바구니는 이미 지워졌고(assemble), TTL 스캔은 예약을 훑는데 예약이 없으므로
+      // 아무도 그 주문을 끝내지 않는다. 고객의 주문 목록에 "결제 대기"가 영구히 걸린다.
+      //
+      // PG 타임아웃과 다르다: 거기서는 결제 여부를 알 수 없어 PENDING_PAYMENT가
+      // 정답이지만(웹훅이 정합시킬 대상이다), 재고 부족은 결정적인 실패다.
+      const reason =
+        outcome.reason === 'OUT_OF_STOCK'
+          ? `재고가 부족합니다: ${line.skuId}`
+          : `재고가 등록되지 않은 SKU입니다: ${line.skuId}`;
+      await this.failOrder(order, reason);
+
       if (outcome.reason === 'OUT_OF_STOCK') {
         throw new OutOfStockError(line.skuId);
       }
       // SKU_UNKNOWN: Catalog는 아는데 Inventory는 모르는 SKU다. 재고 등록이
       // 빠진 것이므로 사용자가 고칠 수 없다 — UnknownSkuError(422)로 말하면
       // "장바구니에서 빼라"는 잘못된 안내가 된다.
-      throw new Error(`재고가 등록되지 않은 SKU입니다: ${line.skuId}`);
+      throw new Error(reason);
     }
     return acquired;
+  }
+
+  /**
+   * 주문을 실패로 끝내고 `OrderPaymentFailed`를 발행한다.
+   *
+   * 그 이벤트를 Inventory가 구독해 예약을 해제하는데, 여기서는 이미 인라인으로
+   * 풀었으므로 두 번째 해제는 `false`를 돌려주는 no-op이다 — 멱등성이 그 중복을
+   * 감당한다. 이벤트를 건너뛰지 않는 이유: 인라인 해제가 실패했을 때 이벤트가
+   * 두 번째 기회이기 때문이다.
+   */
+  private async failOrder(order: Order, reason: string): Promise<void> {
+    const now = this.clock.now();
+    await this.transactions.run(async (tx) => {
+      order.failPayment(reason, now);
+      await this.orders.save(order, tx);
+      await this.events.publish(order.pullEvents(), tx);
+    });
   }
 
   /**
