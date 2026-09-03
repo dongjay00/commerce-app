@@ -11,10 +11,14 @@ export class InvalidMoneyError extends Error {
 
 /**
  * 서로 다른 통화의 Money끼리 연산하려 할 때 던진다. DomainError로 승격하지 않는다 —
- * 이게 실제로 발생한다면 사용자 입력 문제가 아니라 Cart가 통화가 다른 라인을
- * 애초에 허용했다는 뜻이고, 그건 불변식의 구멍이다. 사용자가 고칠 수 없으므로 500이
- * 맞는 응답이다. TODO(plan 4): Cart에 단일 통화 불변식을 추가해 이 경로 자체가
- * 발생하지 않도록 한다.
+ * 이게 실제로 발생한다면 사용자 입력 문제가 아니라 불변식의 구멍이다. 사용자가 고칠
+ * 수 없으므로 500이 맞는 응답이다.
+ *
+ * 주문 경로에서는 `Order.place`가 먼저 `MixedCurrencyOrderError`(422)로 막으므로 이
+ * 예외에 도달하지 않는다 — 계획 4의 편차 2가 그 판단이다. `Cart`가 아니라 `Order`인
+ * 이유: 장바구니에는 가격이 없고(스펙 §10.8의 `cart_lines`는 sku_id와 quantity뿐)
+ * 통화가 처음 만나는 곳이 주문 라인 조립이기 때문이다. 여기 도달했다면 그 경로를
+ * 우회한 호출자가 있다는 뜻이다.
  */
 export class CurrencyMismatchError extends Error {
   constructor(left: Currency, right: Currency) {
