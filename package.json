@@ -17,7 +17,8 @@
     "db:generate": "pnpm --filter @commerce/api db:generate",
     "arch:check": "depcruise --config .dependency-cruiser.js apps packages",
     "arch:graph": "depcruise --config .dependency-cruiser.js --output-type dot apps packages > docs/architecture.dot || true; dot -Tsvg docs/architecture.dot > docs/architecture.svg && rm docs/architecture.dot",
-    "verify": "pnpm lint && pnpm arch:check && pnpm typecheck && pnpm -r --if-present build && pnpm test:coverage"
+    "verify": "pnpm lint && pnpm arch:check && pnpm typecheck && pnpm -r --if-present build && pnpm test:coverage",
+    "test:e2e": "pnpm --filter @commerce/web test:e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.0",
