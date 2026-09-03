@@ -3,6 +3,7 @@ import type {
   ProductQuery,
   ProductView,
   SearchCriteria,
+  SkuPriceView,
 } from '../application/ports/out/product.query';
 import type { Product } from '../domain/product';
 import type { InMemoryProductRepository } from './in-memory-product.repository';
@@ -46,5 +47,22 @@ export class InMemoryProductQuery implements ProductQuery {
       .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id))
       .slice(criteria.offset, criteria.offset + criteria.limit)
       .map(toProductView);
+  }
+
+  async findSkus(skuIds: readonly string[]): Promise<SkuPriceView[]> {
+    const all = await this.products.findAll();
+    return all
+      .filter((product) => product.status === 'ACTIVE')
+      .flatMap((product) =>
+        product.skus
+          .filter((sku) => skuIds.includes(sku.id))
+          .map((sku) => ({
+            skuId: sku.id,
+            productName: product.name,
+            skuCode: sku.code,
+            amount: sku.price.money.amount.toString(),
+            currency: sku.price.money.currency,
+          })),
+      );
   }
 }

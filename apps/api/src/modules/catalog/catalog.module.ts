@@ -12,6 +12,7 @@ import { registerCatalogDomainErrors } from './adapters/in/http/catalog-domain-e
 import { ProductController } from './adapters/in/http/product.controller';
 import { PrismaProductQuery } from './adapters/out/persistence/prisma-product.query';
 import { PrismaProductRepository } from './adapters/out/persistence/prisma-product.repository';
+import { FIND_SKU_PRICES_QUERY } from './application/ports/in/queries/find-sku-prices.query';
 import { GET_PRODUCT_QUERY } from './application/ports/in/queries/get-product.query';
 import { SEARCH_PRODUCTS_QUERY } from './application/ports/in/queries/search-products.query';
 import { REGISTER_PRODUCT_USECASE } from './application/ports/in/register-product.usecase';
@@ -21,6 +22,7 @@ import {
   PRODUCT_REPOSITORY,
   type ProductRepository,
 } from './application/ports/out/product.repository';
+import { FindSkuPricesService } from './application/services/find-sku-prices.service';
 import { GetProductService } from './application/services/get-product.service';
 import { RegisterProductService } from './application/services/register-product.service';
 import { SearchProductsService } from './application/services/search-products.service';
@@ -63,11 +65,17 @@ import { UpdatePriceService } from './application/services/update-price.service'
       inject: [PRODUCT_QUERY],
     },
     {
+      provide: FIND_SKU_PRICES_QUERY,
+      useFactory: (query: ProductQuery) => new FindSkuPricesService(query),
+      inject: [PRODUCT_QUERY],
+    },
+    {
       provide: SEARCH_PRODUCTS_QUERY,
       useFactory: (query: ProductQuery) => new SearchProductsService(query),
       inject: [PRODUCT_QUERY],
     },
   ],
+  exports: [FIND_SKU_PRICES_QUERY],
 })
 export class CatalogModule {
   constructor(registry: DomainErrorRegistry) {

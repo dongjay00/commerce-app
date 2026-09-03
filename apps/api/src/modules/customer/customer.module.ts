@@ -67,7 +67,7 @@ import { ProvisionCustomerService } from './application/services/provision-custo
   ],
   // identity가 ACL 어댑터에서 쓴다. 리포지토리는 내보내지 않는다 —
   // 다른 모듈이 우리 애그리거트를 직접 만지면 불변식의 주인이 사라진다.
-  exports: [PROVISION_CUSTOMER_USECASE, FIND_CUSTOMER_BY_ACCOUNT_QUERY],
+  exports: [PROVISION_CUSTOMER_USECASE, FIND_CUSTOMER_BY_ACCOUNT_QUERY, GET_ADDRESS_BOOK_QUERY],
 })
 export class CustomerModule {
   constructor(registry: DomainErrorRegistry) {

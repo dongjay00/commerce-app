@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FIND_SKU_PRICES_QUERY } from './in/queries/find-sku-prices.query';
 import { GET_PRODUCT_QUERY } from './in/queries/get-product.query';
 import { SEARCH_PRODUCTS_QUERY } from './in/queries/search-products.query';
 import { REGISTER_PRODUCT_USECASE } from './in/register-product.usecase';
@@ -25,6 +26,7 @@ describe('Catalog 포트 토큰', () => {
     { token: REGISTER_PRODUCT_USECASE, name: 'RegisterProductUseCase' },
     { token: UPDATE_PRICE_USECASE, name: 'UpdatePriceUseCase' },
     { token: GET_PRODUCT_QUERY, name: 'GetProductQuery' },
+    { token: FIND_SKU_PRICES_QUERY, name: 'FindSkuPricesQuery' },
     { token: SEARCH_PRODUCTS_QUERY, name: 'SearchProductsQuery' },
   ];
 
