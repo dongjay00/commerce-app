@@ -1,7 +1,13 @@
 import { Module } from '@nestjs/common';
+// biome-ignore lint/style/useImportType: Nest DI가 design:paramtypes 런타임 값을 요구한다.
+import { SchedulerRegistry } from '@nestjs/schedule';
 // biome-ignore lint/style/useImportType: Nest DI가 design:paramtypes 런타임 값을 요구한다 — type-only면 모듈 생성자 주입이 깨진다.
 import { DomainErrorRegistry } from '../../shared/infrastructure/http/domain-error.registry';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
+import {
+  SCHEDULER_CONFIG,
+  type SchedulerConfig,
+} from '../../shared/infrastructure/scheduler/scheduler.config';
 import { CLOCK, type Clock } from '../../shared/kernel/ports/clock';
 import {
   DOMAIN_EVENT_PUBLISHER,
@@ -14,10 +20,14 @@ import {
 } from '../../shared/kernel/ports/transaction-manager';
 import { registerInventoryDomainErrors } from './adapters/in/http/inventory-domain-error-mappings';
 import { StockController } from './adapters/in/http/stock.controller';
+import { ReservationExpiryScheduler } from './adapters/in/scheduler/reservation-expiry.scheduler';
 import { PessimisticStockRepository } from './adapters/out/persistence/pessimistic-stock.repository';
 import { PrismaReservationRepository } from './adapters/out/persistence/prisma-reservation.repository';
 import { CONFIRM_RESERVATION_USECASE } from './application/ports/in/confirm-reservation.usecase';
-import { EXPIRE_RESERVATIONS_USECASE } from './application/ports/in/expire-reservations.usecase';
+import {
+  EXPIRE_RESERVATIONS_USECASE,
+  type ExpireReservationsUseCase,
+} from './application/ports/in/expire-reservations.usecase';
 import { GET_STOCK_QUERY } from './application/ports/in/queries/get-stock.query';
 import { REGISTER_STOCK_USECASE } from './application/ports/in/register-stock.usecase';
 import { RELEASE_RESERVATION_USECASE } from './application/ports/in/release-reservation.usecase';
@@ -122,6 +132,16 @@ const RESERVATION_TTL = readReservationTtl(process.env);
       useFactory: (stocks: StockRepository, transactions: TransactionManager) =>
         new RestockService(stocks, transactions),
       inject: [STOCK_REPOSITORY, TRANSACTION_MANAGER],
+    },
+    {
+      // 생성자: ReservationExpiryScheduler(registry, config, expireReservations)
+      provide: ReservationExpiryScheduler,
+      useFactory: (
+        registry: SchedulerRegistry,
+        config: SchedulerConfig,
+        expireReservations: ExpireReservationsUseCase,
+      ) => new ReservationExpiryScheduler(registry, config, expireReservations),
+      inject: [SchedulerRegistry, SCHEDULER_CONFIG, EXPIRE_RESERVATIONS_USECASE],
     },
     {
       // 생성자: GetStockService(stocks) — 재고 조회는 애그리거트를 거친다.

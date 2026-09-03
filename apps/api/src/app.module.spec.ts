@@ -17,6 +17,7 @@ import { AuthController } from './modules/identity/adapters/in/http/auth.control
 import { EmailAlreadyRegisteredError } from './modules/identity/domain/account.errors';
 import { SessionRevokedError } from './modules/identity/domain/session.errors';
 import { StockController } from './modules/inventory/adapters/in/http/stock.controller';
+import { ReservationExpiryScheduler } from './modules/inventory/adapters/in/scheduler/reservation-expiry.scheduler';
 import { PessimisticStockRepository } from './modules/inventory/adapters/out/persistence/pessimistic-stock.repository';
 import { STOCK_REPOSITORY } from './modules/inventory/application/ports/out/stock.repository';
 import {
@@ -34,7 +35,12 @@ import { HealthController } from './shared/infrastructure/http/health.controller
 import { UnauthenticatedError } from './shared/infrastructure/http/unauthenticated.error';
 import { ValidationFailedError } from './shared/infrastructure/http/zod-validation.pipe';
 import { OutboxRelay } from './shared/infrastructure/outbox/outbox-relay';
+import { OutboxRelayScheduler } from './shared/infrastructure/outbox/outbox-relay.scheduler';
 import { PrismaService } from './shared/infrastructure/prisma/prisma.service';
+import {
+  SCHEDULER_CONFIG,
+  type SchedulerConfig,
+} from './shared/infrastructure/scheduler/scheduler.config';
 import { InvalidIdError } from './shared/kernel/identifiers';
 import { ACCESS_TOKEN_VERIFIER } from './shared/kernel/ports/access-token-verifier';
 import { CLOCK } from './shared/kernel/ports/clock';
@@ -156,6 +162,19 @@ describe('AppModule DI 그래프', () => {
     // 스펙 §6.4가 정한 기본 전략이다. 낙관적으로 바꿔도 모든 테스트가 통과하므로
     // (태스크 14의 프루브 a), 어느 쪽이 배선되어 있는지는 이 단언만이 고정한다.
     expect(moduleRef.get(STOCK_REPOSITORY)).toBeInstanceOf(PessimisticStockRepository);
+  });
+
+  it('두 스케줄러가 배선되어 있다', () => {
+    // 계획 1 이후 OutboxRelay에 프로덕션 호출자가 없었다 — 이벤트가 outbox에
+    // 쌓이기만 하고 아무 데도 도착하지 않았다. 이 단언이 그 회귀를 막는다.
+    expect(moduleRef.get(OutboxRelayScheduler)).toBeInstanceOf(OutboxRelayScheduler);
+    expect(moduleRef.get(ReservationExpiryScheduler)).toBeInstanceOf(ReservationExpiryScheduler);
+  });
+
+  it('테스트 환경에서는 스케줄러가 꺼져 있다', () => {
+    // apps/api/.env의 SCHEDULERS_ENABLED=false가 실제로 도달하는지 확인한다.
+    // 켜져 있으면 배경 폴링이 통합 테스트의 TRUNCATE와 경합한다.
+    expect(moduleRef.get<SchedulerConfig>(SCHEDULER_CONFIG).enabled).toBe(false);
   });
 
   it('AccessTokenGuard가 해석되고 검증기를 주입받는다', () => {
