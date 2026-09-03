@@ -18,6 +18,7 @@ import {
   TRANSACTION_MANAGER,
   type TransactionManager,
 } from '../../shared/kernel/ports/transaction-manager';
+import { InventoryEventSubscriber } from './adapters/in/events/inventory-event.subscriber';
 import { registerInventoryDomainErrors } from './adapters/in/http/inventory-domain-error-mappings';
 import { StockController } from './adapters/in/http/stock.controller';
 import { ReservationExpiryScheduler } from './adapters/in/scheduler/reservation-expiry.scheduler';
@@ -65,6 +66,8 @@ const RESERVATION_TTL = readReservationTtl(process.env);
 @Module({
   controllers: [StockController],
   providers: [
+    // @OnEvent는 프로바이더에서 동작한다 — controllers가 아니다.
+    InventoryEventSubscriber,
     {
       // 기본 전략은 비관적 락이다(스펙 §6.4). 낙관적 어댑터로 바꾸려면 이 한 줄만
       // 고치면 되고, 도메인도 유스케이스도 테스트도 그대로다 — 그것이 포트 하나에

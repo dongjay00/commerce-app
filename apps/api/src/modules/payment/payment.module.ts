@@ -12,6 +12,7 @@ import {
   TRANSACTION_MANAGER,
   type TransactionManager,
 } from '../../shared/kernel/ports/transaction-manager';
+import { PaymentEventSubscriber } from './adapters/in/events/payment-event.subscriber';
 import { registerPaymentDomainErrors } from './adapters/in/http/payment-domain-error-mappings';
 import { PgWebhookController } from './adapters/in/http/pg-webhook.controller';
 import { PrismaPaymentRepository } from './adapters/out/persistence/prisma-payment.repository';
@@ -35,6 +36,7 @@ import { PaymentService } from './application/services/payment.service';
 @Module({
   controllers: [PgWebhookController],
   providers: [
+    PaymentEventSubscriber,
     { provide: PG_CLIENT, useClass: FakePgAdapter },
     // FakePgAdapter를 클래스 토큰으로도 해석 가능하게 둔다. E2E가 이 인스턴스를
     // 꺼내 scenario를 바꾼다(태스크 21). useExisting이라 인스턴스는 하나다.

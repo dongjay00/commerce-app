@@ -16,6 +16,7 @@ import { AddressNotFoundError } from './modules/customer/domain/customer.errors'
 import { AuthController } from './modules/identity/adapters/in/http/auth.controller';
 import { EmailAlreadyRegisteredError } from './modules/identity/domain/account.errors';
 import { SessionRevokedError } from './modules/identity/domain/session.errors';
+import { InventoryEventSubscriber } from './modules/inventory/adapters/in/events/inventory-event.subscriber';
 import { StockController } from './modules/inventory/adapters/in/http/stock.controller';
 import { ReservationExpiryScheduler } from './modules/inventory/adapters/in/scheduler/reservation-expiry.scheduler';
 import { PessimisticStockRepository } from './modules/inventory/adapters/out/persistence/pessimistic-stock.repository';
@@ -27,6 +28,7 @@ import {
   StockContentionError,
   StockNotFoundError,
 } from './modules/inventory/domain/stock.errors';
+import { PaymentEventSubscriber } from './modules/payment/adapters/in/events/payment-event.subscriber';
 import { PgWebhookController } from './modules/payment/adapters/in/http/pg-webhook.controller';
 import { FakePgAdapter } from './modules/payment/adapters/out/pg/fake-pg.adapter';
 import { PG_CLIENT } from './modules/payment/application/ports/out/pg-client';
@@ -204,6 +206,13 @@ describe('AppModule DI 그래프', () => {
       status: 404,
       code: ErrorCode.NOT_FOUND,
     });
+  });
+
+  it('이벤트 구독 어댑터가 해석된다', () => {
+    // 구독자가 프로바이더로 등록되지 않으면 @OnEvent가 아예 붙지 않고,
+    // 사가의 역방향 경로가 조용히 끊긴다.
+    expect(moduleRef.get(InventoryEventSubscriber)).toBeInstanceOf(InventoryEventSubscriber);
+    expect(moduleRef.get(PaymentEventSubscriber)).toBeInstanceOf(PaymentEventSubscriber);
   });
 
   it('AccessTokenGuard가 해석되고 검증기를 주입받는다', () => {
