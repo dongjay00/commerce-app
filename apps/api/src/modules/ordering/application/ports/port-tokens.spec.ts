@@ -5,11 +5,15 @@ import { CHANGE_CART_ITEM_QUANTITY_USECASE } from './in/change-cart-item-quantit
 import { HANDLE_PAYMENT_REFUNDED_USECASE } from './in/handle-payment-refunded.usecase';
 import { HANDLE_STOCK_RESERVATION_EXPIRED_USECASE } from './in/handle-stock-reservation-expired.usecase';
 import { PLACE_ORDER_USECASE } from './in/place-order.usecase';
+import { GET_CART_QUERY } from './in/queries/get-cart.query';
+import { GET_ORDER_QUERY } from './in/queries/get-order.query';
+import { LIST_MY_ORDERS_QUERY } from './in/queries/list-my-orders.query';
 import { REMOVE_ITEM_FROM_CART_USECASE } from './in/remove-item-from-cart.usecase';
 import { CART_REPOSITORY } from './out/cart.repository';
 import { CATALOG_PRICE_PROVIDER } from './out/catalog-price.provider';
 import { CUSTOMER_ADDRESS_PROVIDER } from './out/customer-address.provider';
 import { INVENTORY_RESERVER } from './out/inventory-reserver';
+import { ORDER_QUERY } from './out/order.query';
 import { ORDER_REPOSITORY } from './out/order.repository';
 import { PAYMENT_GATEWAY } from './out/payment.gateway';
 
@@ -26,6 +30,10 @@ describe('Ordering 포트 토큰', () => {
   const tokens: Array<{ token: symbol; name: string }> = [
     { token: CART_REPOSITORY, name: 'CartRepository' },
     { token: ORDER_REPOSITORY, name: 'OrderRepository' },
+    { token: ORDER_QUERY, name: 'OrderQuery' },
+    { token: GET_CART_QUERY, name: 'GetCartQuery' },
+    { token: GET_ORDER_QUERY, name: 'GetOrderQuery' },
+    { token: LIST_MY_ORDERS_QUERY, name: 'ListMyOrdersQuery' },
     { token: CATALOG_PRICE_PROVIDER, name: 'CatalogPriceProvider' },
     { token: CUSTOMER_ADDRESS_PROVIDER, name: 'CustomerAddressProvider' },
     { token: INVENTORY_RESERVER, name: 'InventoryReserver' },
