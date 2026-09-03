@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CurrencyMismatchError, InvalidMoneyError, Money } from './money';
+import { Quantity } from './quantity';
 
 describe('Money', () => {
   describe('생성', () => {
@@ -113,5 +114,47 @@ describe('Money', () => {
       expect(Money.fromDto({ amount: '-500', currency: 'KRW' }).amount).toBe(-500n);
       expect(Money.fromDto({ amount: '15000', currency: 'KRW' }).amount).toBe(15000n);
     });
+  });
+});
+
+describe('Money.multiply — Quantity 오버로드', () => {
+  it('Quantity를 곱한다', () => {
+    // 스펙 §6.5의 시그니처다. .value를 꺼내 쓰면 Quantity의 불변식이 호출부로 샌다.
+    expect(Money.of(1200).multiply(Quantity.positive(3)).amount).toBe(3600n);
+  });
+
+  it('수량 0을 곱하면 0원이다', () => {
+    expect(Money.of(1200).multiply(Quantity.of(0)).amount).toBe(0n);
+  });
+
+  it('통화는 그대로 유지된다', () => {
+    expect(Money.of(500, 'USD').multiply(Quantity.positive(2)).currency).toBe('USD');
+  });
+
+  it('number 오버로드도 그대로 동작한다', () => {
+    // 기존 호출부를 깨지 않는다.
+    expect(Money.of(1200).multiply(3).amount).toBe(3600n);
+  });
+});
+
+describe('Money.sum', () => {
+  it('여러 금액을 더한다', () => {
+    const total = Money.sum([Money.of(1000), Money.of(2500), Money.of(300)]);
+    expect(total.amount).toBe(3800n);
+  });
+
+  it('빈 배열이면 fallback 통화의 0원이다', () => {
+    // 주문에 라인이 없는 경우는 Order가 막지만, sum 자체는 총계 계산기로서
+    // 빈 입력에 답을 내야 한다. 통화를 추론할 근거가 없으므로 인자로 받는다.
+    expect(Money.sum([], 'USD')).toEqual(Money.zero('USD'));
+    expect(Money.sum([])).toEqual(Money.zero('KRW'));
+  });
+
+  it('통화가 섞이면 CurrencyMismatchError다', () => {
+    // 이 예외에 도달하는 것은 호출자의 버그다. 주문 경로에서는 Order.place가
+    // 먼저 MixedCurrencyOrderError(422)로 막는다(태스크 9).
+    expect(() => Money.sum([Money.of(100, 'KRW'), Money.of(100, 'USD')])).toThrow(
+      CurrencyMismatchError,
+    );
   });
 });

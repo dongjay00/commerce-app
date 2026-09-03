@@ -1,3 +1,5 @@
+import type { Quantity } from './quantity';
+
 export type Currency = 'KRW' | 'USD';
 
 export class InvalidMoneyError extends Error {
@@ -68,12 +70,34 @@ export class Money {
     return new Money(this.amount - other.amount, this.currency);
   }
 
-  /** 반올림이 생기지 않도록 정수 배수만 허용한다. */
-  multiply(factor: number): Money {
+  /**
+   * 반올림이 생기지 않도록 정수 배수만 허용한다.
+   *
+   * `Quantity` 오버로드가 스펙 §6.5가 적은 시그니처다. `number`도 계속 받는 이유는
+   * 수량이 아닌 배수(예: 2배 프로모션)가 있을 수 있기 때문이고, 주문 라인처럼
+   * 수량을 곱하는 자리에서는 반드시 `Quantity`를 넘긴다 — `.value`를 꺼내 쓰면
+   * `Quantity`가 지키던 "정수이고 음수가 아니다"가 호출부의 책임으로 돌아온다.
+   */
+  multiply(times: Quantity | number): Money {
+    const factor = typeof times === 'number' ? times : times.value;
     if (!Number.isInteger(factor)) {
       throw new InvalidMoneyError(`배수는 정수여야 합니다: ${factor}`);
     }
     return new Money(this.amount * BigInt(factor), this.currency);
+  }
+
+  /**
+   * 합계. 빈 배열이면 통화를 추론할 근거가 없으므로 `fallbackCurrency`의 0원을 준다.
+   *
+   * 주문 총액이 이 함수 하나로 계산된다. 호출부마다 `reduce`를 손으로 쓰면
+   * 통화 검사를 빠뜨린 곳이 하나쯤 생기고, 금액 버그는 커머스에서 가장 비싸다.
+   */
+  static sum(values: readonly Money[], fallbackCurrency: Currency = 'KRW'): Money {
+    const first = values[0];
+    if (first === undefined) {
+      return Money.zero(fallbackCurrency);
+    }
+    return values.slice(1).reduce((acc, value) => acc.plus(value), first);
   }
 
   equals(other: Money): boolean {
