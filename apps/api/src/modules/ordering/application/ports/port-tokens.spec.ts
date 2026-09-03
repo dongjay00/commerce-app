@@ -3,6 +3,11 @@ import { ADD_ITEM_TO_CART_USECASE } from './in/add-item-to-cart.usecase';
 import { CHANGE_CART_ITEM_QUANTITY_USECASE } from './in/change-cart-item-quantity.usecase';
 import { REMOVE_ITEM_FROM_CART_USECASE } from './in/remove-item-from-cart.usecase';
 import { CART_REPOSITORY } from './out/cart.repository';
+import { CATALOG_PRICE_PROVIDER } from './out/catalog-price.provider';
+import { CUSTOMER_ADDRESS_PROVIDER } from './out/customer-address.provider';
+import { INVENTORY_RESERVER } from './out/inventory-reserver';
+import { ORDER_REPOSITORY } from './out/order.repository';
+import { PAYMENT_GATEWAY } from './out/payment.gateway';
 
 /**
  * 포트 토큰의 정체성을 고정한다.
@@ -16,6 +21,11 @@ import { CART_REPOSITORY } from './out/cart.repository';
 describe('Ordering 포트 토큰', () => {
   const tokens: Array<{ token: symbol; name: string }> = [
     { token: CART_REPOSITORY, name: 'CartRepository' },
+    { token: ORDER_REPOSITORY, name: 'OrderRepository' },
+    { token: CATALOG_PRICE_PROVIDER, name: 'CatalogPriceProvider' },
+    { token: CUSTOMER_ADDRESS_PROVIDER, name: 'CustomerAddressProvider' },
+    { token: INVENTORY_RESERVER, name: 'InventoryReserver' },
+    { token: PAYMENT_GATEWAY, name: 'PaymentGateway' },
     { token: ADD_ITEM_TO_CART_USECASE, name: 'AddItemToCartUseCase' },
     { token: REMOVE_ITEM_FROM_CART_USECASE, name: 'RemoveItemFromCartUseCase' },
     { token: CHANGE_CART_ITEM_QUANTITY_USECASE, name: 'ChangeCartItemQuantityUseCase' },
