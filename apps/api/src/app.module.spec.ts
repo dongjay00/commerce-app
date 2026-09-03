@@ -28,6 +28,18 @@ import {
   StockContentionError,
   StockNotFoundError,
 } from './modules/inventory/domain/stock.errors';
+import { OrderingEventSubscriber } from './modules/ordering/adapters/in/events/ordering-event.subscriber';
+import { CartController } from './modules/ordering/adapters/in/http/cart.controller';
+import { OrderController } from './modules/ordering/adapters/in/http/order.controller';
+import { PLACE_ORDER_USECASE } from './modules/ordering/application/ports/in/place-order.usecase';
+import { PlaceOrderService } from './modules/ordering/application/services/place-order.service';
+import { CartNotFoundError } from './modules/ordering/domain/cart/cart.errors';
+import {
+  EmptyCartError,
+  OrderConflictError,
+  OrderNotOwnedError,
+  OutOfStockError,
+} from './modules/ordering/domain/order/order.errors';
 import { PaymentEventSubscriber } from './modules/payment/adapters/in/events/payment-event.subscriber';
 import { PgWebhookController } from './modules/payment/adapters/in/http/pg-webhook.controller';
 import { FakePgAdapter } from './modules/payment/adapters/out/pg/fake-pg.adapter';
@@ -213,6 +225,46 @@ describe('AppModule DI 그래프', () => {
     // 사가의 역방향 경로가 조용히 끊긴다.
     expect(moduleRef.get(InventoryEventSubscriber)).toBeInstanceOf(InventoryEventSubscriber);
     expect(moduleRef.get(PaymentEventSubscriber)).toBeInstanceOf(PaymentEventSubscriber);
+  });
+
+  it('Ordering 컨트롤러 둘이 해석된다', () => {
+    expect(moduleRef.get(CartController)).toBeInstanceOf(CartController);
+    expect(moduleRef.get(OrderController)).toBeInstanceOf(OrderController);
+  });
+
+  it('PLACE_ORDER_USECASE가 PlaceOrderService로 해석된다', () => {
+    // inject 배열이 생성자 인자 순서와 어긋나면 여기서 터지거나(운이 좋으면)
+    // 사가 E2E에서 엉뚱한 포트를 부르며 터진다(운이 나쁘면).
+    expect(moduleRef.get(PLACE_ORDER_USECASE)).toBeInstanceOf(PlaceOrderService);
+  });
+
+  it('Ordering 예외 매핑이 등록되어 있다', () => {
+    const registry = moduleRef.get(DomainErrorRegistry);
+    // 계획 1이 계약에 넣어둔 ORDER_NOT_CANCELLABLE의 첫 사용처다.
+    expect(registry.resolve(OrderConflictError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.ORDER_NOT_CANCELLABLE,
+    });
+    expect(registry.resolve(OutOfStockError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.INSUFFICIENT_STOCK,
+    });
+    expect(registry.resolve(OrderNotOwnedError.CODE)).toEqual({
+      status: 403,
+      code: ErrorCode.FORBIDDEN,
+    });
+    expect(registry.resolve(EmptyCartError.CODE)).toEqual({
+      status: 422,
+      code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    });
+    expect(registry.resolve(CartNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
+  });
+
+  it('OrderingEventSubscriber가 해석된다', () => {
+    expect(moduleRef.get(OrderingEventSubscriber)).toBeInstanceOf(OrderingEventSubscriber);
   });
 
   it('AccessTokenGuard가 해석되고 검증기를 주입받는다', () => {
