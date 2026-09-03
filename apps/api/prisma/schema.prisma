@@ -160,3 +160,94 @@ model Reservation {
   @@index([orderId])
   @@map("reservations")
 }
+
+model Cart {
+  id         String     @id @db.Uuid
+  customerId String     @unique @map("customer_id") @db.Uuid
+  createdAt  DateTime   @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime   @map("updated_at") @db.Timestamptz(3)
+  lines      CartLine[]
+
+  @@map("carts")
+}
+
+model CartLine {
+  cartId   String @map("cart_id") @db.Uuid
+  skuId    String @map("sku_id") @db.Uuid
+  quantity Int
+  cart     Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  /// 같은 SKU가 한 장바구니에 두 줄로 들어가지 않는다(스펙 §5.1의 Cart 불변식).
+  /// 도메인도 같은 규칙을 지키지만, DB가 마지막 방어선이다.
+  @@id([cartId, skuId])
+  @@map("cart_lines")
+}
+
+model Order {
+  id            String      @id @db.Uuid
+  customerId    String      @map("customer_id") @db.Uuid
+  status        String
+  totalAmount   BigInt      @map("total_amount")
+  totalCurrency String      @map("total_currency")
+  /// 배송지 스냅샷. Customer의 SavedAddress를 참조하지 않는다 — 고객이 이사해서
+  /// 주소록을 고쳐도 과거 주문의 배송지는 그대로 남아야 한다(스펙 §5.3).
+  shipRecipient String      @map("ship_recipient")
+  shipPhone     String      @map("ship_phone")
+  shipZip       String      @map("ship_zip")
+  shipLine1     String      @map("ship_line1")
+  shipLine2     String?     @map("ship_line2")
+  placedAt      DateTime    @map("placed_at") @db.Timestamptz(3)
+  updatedAt     DateTime    @map("updated_at") @db.Timestamptz(3)
+  lines         OrderLine[]
+
+  /// ListMyOrders가 이 인덱스를 쓴다 — 최신 주문부터.
+  @@index([customerId, placedAt(sort: Desc)], map: "orders_customer_placed_at_idx")
+  @@map("orders")
+}
+
+model OrderLine {
+  orderId           String @map("order_id") @db.Uuid
+  skuId             String @map("sku_id") @db.Uuid
+  /// 가격 스냅샷. Catalog의 Product를 참조하지 않는다 — 상품 가격이 바뀌어도
+  /// 과거 주문 금액은 따라 바뀌지 않는다(스펙 §5.3).
+  nameSnapshot      String @map("name_snapshot")
+  unitPriceAmount   BigInt @map("unit_price_amount")
+  unitPriceCurrency String @map("unit_price_currency")
+  quantity          Int
+  order             Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// VO라 자체 id가 없다(스펙 §10.8). (order_id, sku_id)가 자연키다.
+  @@id([orderId, skuId])
+  @@map("order_lines")
+}
+
+model Payment {
+  id               String           @id @db.Uuid
+  /// FK를 걸지 않는다. Payment는 Ordering과 다른 컨텍스트이고, DB 제약으로 두
+  /// 컨텍스트를 묶으면 나중에 결제를 별도 서비스로 떼어낼 때 스키마가 발목을 잡는다.
+  /// 계획 3이 reservations에 내린 것과 같은 판단이다.
+  orderId          String           @unique @map("order_id") @db.Uuid
+  status           String
+  authorizedAmount BigInt           @map("authorized_amount")
+  currency         String
+  createdAt        DateTime         @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime         @map("updated_at") @db.Timestamptz(3)
+  attempts         PaymentAttempt[]
+
+  @@map("payments")
+}
+
+model PaymentAttempt {
+  id          String   @id @db.Uuid
+  paymentId   String   @map("payment_id") @db.Uuid
+  /// PG 거래 식별자. 유니크가 웹훅 멱등성의 근거다(스펙 §10.8) — 같은 콜백이
+  /// 두 번 와도 두 번째 INSERT가 P2002로 튕긴다.
+  pgTxId      String   @unique @map("pg_tx_id")
+  result      String
+  reason      String?
+  attemptedAt DateTime @map("attempted_at") @db.Timestamptz(3)
+  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@map("payment_attempts")
+}
