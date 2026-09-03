@@ -6,6 +6,7 @@ import type { StockRepository } from '../../../application/ports/out/stock.repos
 import { StockNotFoundError } from '../../../domain/stock.errors';
 import type { StockItem } from '../../../domain/stock-item';
 import { type StockRow, toStockDomain } from './stock.mapper';
+import { translateStockUniqueViolation } from './stock-unique-violation';
 
 /**
  * 비관적 락 어댑터. **기본 전략이다** (스펙 §6.4).
@@ -62,10 +63,14 @@ export class PessimisticStockRepository implements StockRepository {
   }
 
   async create(stock: StockItem, tx?: TransactionContext): Promise<void> {
-    // 이미 있으면 P2002로 던진다 — 계약의 '두 번 create하면 던진다'가 그것이다.
-    await this.client(tx).stockItem.create({
-      data: { skuId: stock.skuId, onHand: stock.onHand.value, reserved: stock.reserved.value },
-    });
+    // version은 넘기지 않는다 — 스키마 기본값 0에 맡긴다.
+    try {
+      await this.client(tx).stockItem.create({
+        data: { skuId: stock.skuId, onHand: stock.onHand.value, reserved: stock.reserved.value },
+      });
+    } catch (error) {
+      translateStockUniqueViolation(error, stock.skuId);
+    }
   }
 
   private client(tx?: TransactionContext): PrismaClient {

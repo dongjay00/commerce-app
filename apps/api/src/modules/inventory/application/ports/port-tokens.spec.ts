@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIRM_RESERVATION_USECASE } from './in/confirm-reservation.usecase';
 import { EXPIRE_RESERVATIONS_USECASE } from './in/expire-reservations.usecase';
+import { GET_STOCK_QUERY } from './in/queries/get-stock.query';
+import { REGISTER_STOCK_USECASE } from './in/register-stock.usecase';
 import { RELEASE_RESERVATION_USECASE } from './in/release-reservation.usecase';
 import { RESERVE_STOCK_USECASE } from './in/reserve-stock.usecase';
+import { RESTOCK_USECASE } from './in/restock.usecase';
 import { RESERVATION_REPOSITORY } from './out/reservation.repository';
 import { STOCK_REPOSITORY } from './out/stock.repository';
 
@@ -27,6 +30,9 @@ describe('Inventory 포트 토큰', () => {
     { token: CONFIRM_RESERVATION_USECASE, name: 'ConfirmReservationUseCase' },
     { token: RELEASE_RESERVATION_USECASE, name: 'ReleaseReservationUseCase' },
     { token: EXPIRE_RESERVATIONS_USECASE, name: 'ExpireReservationsUseCase' },
+    { token: REGISTER_STOCK_USECASE, name: 'RegisterStockUseCase' },
+    { token: RESTOCK_USECASE, name: 'RestockUseCase' },
+    { token: GET_STOCK_QUERY, name: 'GetStockQuery' },
   ];
 
   it.each(tokens)('$name 토큰은 심볼이고 설명이 포트 이름과 정확히 일치한다', ({ token, name }) => {

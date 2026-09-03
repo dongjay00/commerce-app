@@ -2,7 +2,7 @@ import type { SkuId } from '../../../shared/kernel/identifiers';
 import type { TransactionContext } from '../../../shared/kernel/ports/transaction-manager';
 import { Quantity } from '../../../shared/kernel/quantity';
 import type { StockRepository } from '../application/ports/out/stock.repository';
-import { StockNotFoundError } from '../domain/stock.errors';
+import { StockAlreadyExistsError, StockNotFoundError } from '../domain/stock.errors';
 import { StockItem } from '../domain/stock-item';
 
 /**
@@ -41,7 +41,7 @@ export class InMemoryStockRepository implements StockRepository {
 
   async create(stock: StockItem, _tx?: TransactionContext): Promise<void> {
     if (this.bySkuId.has(stock.skuId)) {
-      throw new Error(`재고가 이미 존재합니다: ${stock.skuId}`);
+      throw new StockAlreadyExistsError(stock.skuId);
     }
     this.bySkuId.set(stock.skuId, InMemoryStockRepository.copy(stock));
   }

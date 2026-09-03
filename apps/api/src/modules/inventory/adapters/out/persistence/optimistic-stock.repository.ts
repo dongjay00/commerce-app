@@ -6,6 +6,7 @@ import type { StockRepository } from '../../../application/ports/out/stock.repos
 import { StockContentionError, StockNotFoundError } from '../../../domain/stock.errors';
 import type { StockItem } from '../../../domain/stock-item';
 import { toStockDomain } from './stock.mapper';
+import { translateStockUniqueViolation } from './stock-unique-violation';
 
 const DEFAULT_MAX_ATTEMPTS = 20;
 
@@ -85,9 +86,13 @@ export class OptimisticStockRepository implements StockRepository {
 
   async create(stock: StockItem, tx?: TransactionContext): Promise<void> {
     // version은 넘기지 않는다 — 스키마 기본값 0에 맡긴다.
-    await this.client(tx).stockItem.create({
-      data: { skuId: stock.skuId, onHand: stock.onHand.value, reserved: stock.reserved.value },
-    });
+    try {
+      await this.client(tx).stockItem.create({
+        data: { skuId: stock.skuId, onHand: stock.onHand.value, reserved: stock.reserved.value },
+      });
+    } catch (error) {
+      translateStockUniqueViolation(error, stock.skuId);
+    }
   }
 
   private client(tx?: TransactionContext): PrismaClient {

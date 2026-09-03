@@ -103,3 +103,18 @@ export class StockContentionError extends DomainError {
     super(`재고 경합으로 ${attempts}회 재시도 후 실패했습니다: ${skuId}`);
   }
 }
+
+/**
+ * 같은 SKU에 재고 행을 두 번 만들려 했다. 어댑터가 Prisma의 P2002를 번역해 던진다.
+ *
+ * 조용히 덮어쓰면 관리자가 등록을 두 번 눌렀을 때 기존 보유량이 사라진다 —
+ * 그래서 소리 나게 실패한다. 409다.
+ */
+export class StockAlreadyExistsError extends DomainError {
+  static readonly CODE = 'STOCK_ALREADY_EXISTS';
+  readonly code = StockAlreadyExistsError.CODE;
+
+  constructor(skuId: string) {
+    super(`재고가 이미 등록되어 있습니다: ${skuId}`);
+  }
+}

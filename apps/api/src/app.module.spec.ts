@@ -16,6 +16,16 @@ import { AddressNotFoundError } from './modules/customer/domain/customer.errors'
 import { AuthController } from './modules/identity/adapters/in/http/auth.controller';
 import { EmailAlreadyRegisteredError } from './modules/identity/domain/account.errors';
 import { SessionRevokedError } from './modules/identity/domain/session.errors';
+import { StockController } from './modules/inventory/adapters/in/http/stock.controller';
+import { PessimisticStockRepository } from './modules/inventory/adapters/out/persistence/pessimistic-stock.repository';
+import { STOCK_REPOSITORY } from './modules/inventory/application/ports/out/stock.repository';
+import {
+  InsufficientStockError,
+  ReservationNotFoundError,
+  StockAlreadyExistsError,
+  StockContentionError,
+  StockNotFoundError,
+} from './modules/inventory/domain/stock.errors';
 import { JwtTokenService } from './shared/infrastructure/auth/jwt-token.service';
 import { AccessTokenGuard } from './shared/infrastructure/http/access-token.guard';
 import { DomainErrorRegistry } from './shared/infrastructure/http/domain-error.registry';
@@ -109,6 +119,43 @@ describe('AppModule DI 그래프', () => {
       status: 400,
       code: ErrorCode.VALIDATION_FAILED,
     });
+  });
+
+  it('Inventory 예외 매핑이 등록되어 있다', () => {
+    // 등록하지 않은 DomainError는 폴백 {422, DOMAIN_RULE_VIOLATED}로 조용히 떨어진다 —
+    // 예외가 나지 않고 틀린 상태 코드가 나간다. 조립된 레지스트리를 직접 resolve하는
+    // 이 테스트만이 그 회귀를 잡는다.
+    const registry = moduleRef.get(DomainErrorRegistry);
+    expect(registry.resolve(InsufficientStockError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.INSUFFICIENT_STOCK,
+    });
+    expect(registry.resolve(StockNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
+    expect(registry.resolve(StockContentionError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    });
+    expect(registry.resolve(StockAlreadyExistsError.CODE)).toEqual({
+      status: 409,
+      code: ErrorCode.DOMAIN_RULE_VIOLATED,
+    });
+    expect(registry.resolve(ReservationNotFoundError.CODE)).toEqual({
+      status: 404,
+      code: ErrorCode.NOT_FOUND,
+    });
+  });
+
+  it('StockController가 유스케이스를 주입받는다', () => {
+    expect(moduleRef.get(StockController)).toBeInstanceOf(StockController);
+  });
+
+  it('STOCK_REPOSITORY가 비관적 어댑터로 해석된다', () => {
+    // 스펙 §6.4가 정한 기본 전략이다. 낙관적으로 바꿔도 모든 테스트가 통과하므로
+    // (태스크 14의 프루브 a), 어느 쪽이 배선되어 있는지는 이 단언만이 고정한다.
+    expect(moduleRef.get(STOCK_REPOSITORY)).toBeInstanceOf(PessimisticStockRepository);
   });
 
   it('AccessTokenGuard가 해석되고 검증기를 주입받는다', () => {

@@ -3,7 +3,11 @@ import { SkuId } from '../../../shared/kernel/identifiers';
 import type { TransactionContext } from '../../../shared/kernel/ports/transaction-manager';
 import { Quantity } from '../../../shared/kernel/quantity';
 import type { StockRepository } from '../application/ports/out/stock.repository';
-import { InsufficientStockError, StockNotFoundError } from '../domain/stock.errors';
+import {
+  InsufficientStockError,
+  StockAlreadyExistsError,
+  StockNotFoundError,
+} from '../domain/stock.errors';
 import { StockItem } from '../domain/stock-item';
 import { skuUuid } from './inventory.fixtures';
 
@@ -144,7 +148,7 @@ export function stockRepositoryContract(
       await repo.create(StockItem.create({ skuId: sku('8'), onHand: q(10) }));
       await expect(
         repo.create(StockItem.create({ skuId: sku('8'), onHand: q(99) })),
-      ).rejects.toThrow();
+      ).rejects.toThrow(StockAlreadyExistsError);
     });
 
     it('mutate가 돌려준 StockItem을 나중에 바꿔도 저장본은 안 바뀐다', async () => {
