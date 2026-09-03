@@ -31,11 +31,7 @@ export class PrismaReservationRepository implements ReservationRepository {
    *
    * `status = 'PENDING' AND expires_at <= now ORDER BY expires_at ASC LIMIT n`
    */
-  async findExpired(
-    now: Date,
-    limit: number,
-    tx?: TransactionContext,
-  ): Promise<Reservation[]> {
+  async findExpired(now: Date, limit: number, tx?: TransactionContext): Promise<Reservation[]> {
     const rows = await this.client(tx).reservation.findMany({
       where: { status: 'PENDING', expiresAt: { lte: now } },
       orderBy: { expiresAt: 'asc' }, // 오래된 것부터 — 밀린 큐가 줄어드는 방향

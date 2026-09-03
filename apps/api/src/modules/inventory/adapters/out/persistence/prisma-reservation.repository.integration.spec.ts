@@ -1,5 +1,5 @@
-import { PrismaTransactionManager } from '../../../../../shared/infrastructure/prisma/prisma-transaction-manager';
 import { testDb } from '../../../../../../test/setup/database';
+import { PrismaTransactionManager } from '../../../../../shared/infrastructure/prisma/prisma-transaction-manager';
 import { reservationRepositoryContract } from '../../../testing/reservation-repository.contract';
 import { PrismaReservationRepository } from './prisma-reservation.repository';
 
