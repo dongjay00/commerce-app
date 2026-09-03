@@ -86,3 +86,54 @@ export class CorruptedShippingAddressError extends Error {
     this.name = 'CorruptedShippingAddressError';
   }
 }
+
+/** 빈 장바구니로는 주문할 수 없다. */
+export class EmptyCartError extends DomainError {
+  static readonly CODE = 'EMPTY_CART';
+  readonly code = EmptyCartError.CODE;
+
+  constructor() {
+    super('장바구니가 비어 있습니다.');
+  }
+}
+
+/**
+ * 장바구니에 있는 SKU를 Catalog가 모른다. 상품이 삭제되거나 비활성화된 경우다.
+ *
+ * 422인 이유: 사용자가 장바구니에서 그 줄을 빼면 해결된다. 어느 SKU인지 메시지에
+ * 담아 클라이언트가 그 줄을 표시할 수 있게 한다.
+ */
+export class UnknownSkuError extends DomainError {
+  static readonly CODE = 'UNKNOWN_SKU';
+  readonly code = UnknownSkuError.CODE;
+
+  constructor(skuIds: readonly string[]) {
+    super(`판매 중이 아닌 상품이 있습니다: ${skuIds.join(', ')}`);
+  }
+}
+
+/**
+ * 재고가 모자라 예약에 실패했다.
+ *
+ * Inventory의 `InsufficientStockError`를 그대로 쓰지 않는다 — Core가 Supporting의
+ * 예외 타입에 묶이면 Inventory를 별도 서비스로 떼어낼 때 그 타입이 프로세스 경계를
+ * 넘어야 한다. ACL이 값만 번역해 이 예외로 바꾼다.
+ */
+export class OutOfStockError extends DomainError {
+  static readonly CODE = 'OUT_OF_STOCK';
+  readonly code = OutOfStockError.CODE;
+
+  constructor(skuId: string) {
+    super(`재고가 부족합니다: ${skuId}`);
+  }
+}
+
+/** 주문에 지정한 배송지가 이 고객의 주소록에 없다. */
+export class ShippingAddressNotFoundError extends DomainError {
+  static readonly CODE = 'SHIPPING_ADDRESS_NOT_FOUND';
+  readonly code = ShippingAddressNotFoundError.CODE;
+
+  constructor(addressId: string) {
+    super(`배송지를 찾을 수 없습니다: ${addressId}`);
+  }
+}

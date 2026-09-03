@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ADD_ITEM_TO_CART_USECASE } from './in/add-item-to-cart.usecase';
 import { CHANGE_CART_ITEM_QUANTITY_USECASE } from './in/change-cart-item-quantity.usecase';
+import { PLACE_ORDER_USECASE } from './in/place-order.usecase';
 import { REMOVE_ITEM_FROM_CART_USECASE } from './in/remove-item-from-cart.usecase';
 import { CART_REPOSITORY } from './out/cart.repository';
 import { CATALOG_PRICE_PROVIDER } from './out/catalog-price.provider';
@@ -29,6 +30,7 @@ describe('Ordering 포트 토큰', () => {
     { token: ADD_ITEM_TO_CART_USECASE, name: 'AddItemToCartUseCase' },
     { token: REMOVE_ITEM_FROM_CART_USECASE, name: 'RemoveItemFromCartUseCase' },
     { token: CHANGE_CART_ITEM_QUANTITY_USECASE, name: 'ChangeCartItemQuantityUseCase' },
+    { token: PLACE_ORDER_USECASE, name: 'PlaceOrderUseCase' },
   ];
 
   it.each(tokens)('$name 토큰은 심볼이고 설명이 포트 이름과 정확히 일치한다', ({ token, name }) => {
