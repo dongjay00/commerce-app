@@ -52,6 +52,18 @@ export class SkuNotFoundError extends DomainError {
 }
 
 /**
+ * 그런 상품이 없다. 가격 변경과 상세 조회 양쪽에서 난다.
+ */
+export class ProductNotFoundError extends DomainError {
+  static readonly CODE = 'PRODUCT_NOT_FOUND';
+  readonly code = ProductNotFoundError.CODE;
+
+  constructor(productId: string) {
+    super(`상품을 찾을 수 없습니다: ${productId}`);
+  }
+}
+
+/**
  * 저장된 가격이 0 이하다. 정상 경로로는 불가능하다 — `Price.of`가 막기 때문이다.
  * 도달했다면 데이터가 손상된 것이고 사용자가 고칠 수 없으므로 `DomainError`가 아니다.
  */
