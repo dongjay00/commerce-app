@@ -4,6 +4,7 @@ import type {
   ProductQuery,
   ProductView,
   SearchCriteria,
+  SkuPriceView,
 } from '../../../application/ports/out/product.query';
 
 interface QueryRow {
@@ -71,5 +72,32 @@ export class PrismaProductQuery implements ProductQuery {
       take: criteria.limit,
     });
     return rows.map(toProductView);
+  }
+
+  /**
+   * **한 번의 쿼리로 전부 읽는다.** SKU마다 `findUnique`를 부르면 장바구니 20줄에
+   * 쿼리가 20개가 된다(N+1).
+   *
+   * ACTIVE 상품의 SKU만 돌려준다 — 판매 중지된 상품은 주문할 수 없어야 하고,
+   * 없는 SKU는 결과에서 빠진다(포트의 계약).
+   */
+  async findSkus(skuIds: readonly string[]): Promise<SkuPriceView[]> {
+    const rows = await this.prisma.sku.findMany({
+      where: { id: { in: [...skuIds] }, product: { status: 'ACTIVE' } },
+      select: {
+        id: true,
+        code: true,
+        priceAmount: true,
+        priceCurrency: true,
+        product: { select: { name: true } },
+      },
+    });
+    return rows.map((row) => ({
+      skuId: row.id,
+      productName: row.product.name,
+      skuCode: row.code,
+      amount: row.priceAmount.toString(),
+      currency: row.priceCurrency,
+    }));
   }
 }

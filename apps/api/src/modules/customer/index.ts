@@ -16,4 +16,11 @@ export {
   type FindCustomerByAccountCommand,
   type FindCustomerByAccountQuery,
 } from './application/ports/in/queries/find-customer-by-account.query';
+export {
+  GET_ADDRESS_BOOK_QUERY,
+  type GetAddressBookCommand,
+  type GetAddressBookQuery,
+} from './application/ports/in/queries/get-address-book.query';
+/** 타입만 재수출한다 — `AddressQuery` 인터페이스 자체는 내보내지 않는다. */
+export type { AddressView } from './application/ports/out/address.query';
 export { CustomerModule } from './customer.module';

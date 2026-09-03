@@ -1,9 +1,20 @@
-import type { ReservationId } from '../../../../../shared/kernel/identifiers';
+import type { OrderId, ReservationId } from '../../../../../shared/kernel/identifiers';
 import type { TransactionContext } from '../../../../../shared/kernel/ports/transaction-manager';
 import type { Reservation } from '../../../domain/reservation';
 
 export interface ReservationRepository {
   findById(id: ReservationId, tx?: TransactionContext): Promise<Reservation | null>;
+
+  /**
+   * 한 주문의 모든 예약. `reservations.order_id` 인덱스가 이것을 지원한다.
+   *
+   * **상태와 무관하게 전부 돌려준다** — 필터링은 유스케이스의 몫이다.
+   *
+   * 이벤트가 실어 나르는 것은 `orderId`다 — `OrderPaid`에 예약 ID 목록을 넣으려면
+   * `Order`가 Inventory의 내부 식별자를 들어야 하고, 그것은 Core 애그리거트에
+   * 다른 컨텍스트를 박는 결합이다.
+   */
+  findByOrderId(orderId: OrderId, tx?: TransactionContext): Promise<Reservation[]>;
   save(reservation: Reservation, tx?: TransactionContext): Promise<void>;
 
   /**

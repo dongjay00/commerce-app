@@ -6,23 +6,7 @@ import type { ProductRepository } from '../application/ports/out/product.reposit
 import { Price } from '../domain/price';
 import { Product } from '../domain/product';
 import { Sku } from '../domain/sku';
-import { FIXED_NOW, productUuid, skuUuid } from './catalog.fixtures';
-
-function aProduct(suffix: string, skuCount = 2): Product {
-  const skus = Array.from({ length: skuCount }, (_, index) =>
-    Sku.create({
-      id: SkuId.of(skuUuid(`${suffix}${index}`)),
-      code: `CODE-${index}`,
-      price: Price.of(Money.of(BigInt(1000 + index * 100))),
-    }),
-  );
-  return Product.register({
-    id: ProductId.of(productUuid(`${suffix}0`)),
-    name: `상품-${suffix}`,
-    skus,
-    now: FIXED_NOW,
-  });
-}
+import { aProduct, FIXED_NOW, productUuid, skuUuid } from './catalog.fixtures';
 
 /**
  * `ProductRepository`의 계약. in-memory fake와 Prisma 어댑터 양쪽이 통과해야 한다.

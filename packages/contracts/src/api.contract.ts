@@ -4,6 +4,8 @@ import { addressContract } from './customer/address.contract';
 import { healthContract } from './health/health.contract';
 import { authContract } from './identity/auth.contract';
 import { stockContract } from './inventory/stock.contract';
+import { cartContract } from './ordering/cart.contract';
+import { orderContract } from './ordering/order.contract';
 
 const c = initContract();
 
@@ -17,4 +19,6 @@ export const apiContract = c.router({
   address: addressContract,
   product: productContract,
   stock: stockContract,
+  cart: cartContract,
+  order: orderContract,
 });

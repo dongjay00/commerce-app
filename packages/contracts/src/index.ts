@@ -4,5 +4,8 @@ export * from './customer/address.contract';
 export * from './health/health.contract';
 export * from './identity/auth.contract';
 export * from './inventory/stock.contract';
+export * from './ordering/cart.contract';
+export * from './ordering/order.contract';
+export * from './payment/payment.contract';
 export * from './shared/error-codes';
 export * from './shared/money.dto';

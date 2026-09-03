@@ -31,6 +31,55 @@ pnpm --filter @commerce/web dev    # http://localhost:3000
 | `pnpm arch:check` | 아키텍처 경계 규칙 검증 |
 | `pnpm arch:graph` | 의존성 그래프 SVG 생성. graphviz(`dot`)가 설치된 환경에서만 동작하며, 생성물은 커밋하지 않는다 |
 
+## 주문 사가
+
+주문·재고·결제는 서로 다른 애그리거트이고 다른 컨텍스트에 있다. 결제는 외부 PG
+호출이라 원칙 이전에 물리적으로 한 트랜잭션에 넣을 수 없다 — 외부 응답을 기다리며
+DB 트랜잭션을 열어두면 커넥션 풀이 말라죽는다.
+
+예약 기반 사가 + 보상 트랜잭션으로 푼다.
+
+```
+1. Order 생성                 PENDING_PAYMENT       [트랜잭션 1]
+2. 줄마다 재고 예약            Reservation, TTL 15분  [Inventory의 트랜잭션]
+3. 결제 승인                   외부 PG                [트랜잭션 없음]
+4a. 승인 → markPaid()          → OrderPaid           [트랜잭션 3]
+        → Inventory 구독 → 예약 확정 (재고 차감)
+4b. 거절 → failPayment()       → OrderPaymentFailed  [트랜잭션 3]
+        → Inventory 구독 → 예약 해제
+5. 어느 단계가 유실돼도 → TTL 만료 스캔이 예약을 회수하고
+                          StockReservationExpired가 주문을 실패로 끝낸다
+```
+
+**5번이 설계의 요체다.** 보상 트랜잭션 자체가 실패해도(서버가 죽어도) TTL이 결국
+재고를 회복시킨다. 보상 로직을 신뢰할 수 없다는 전제로 설계했다.
+
+`Order`의 상태 머신이 사가 상태를 겸한다 — 별도 사가 엔티티가 없다.
+
+```
+PENDING_PAYMENT ─결제 승인─→ PAID ─취소─→ REFUND_PENDING ─환불 완료─→ REFUNDED
+       │
+       ├─결제 거절 / 재고 부족 / TTL 만료─→ PAYMENT_FAILED
+       └─취소─→ CANCELLED
+```
+
+`REFUND_PENDING`은 취소 요청과 환불 완료 사이의 상태다. 없으면 그 구간에 주문이
+`PAID`로 남아 고객에게 거짓말을 하고, 취소가 멱등하지 않아 이벤트가 두 번 배달될 때
+환불이 두 번 요청된다.
+
+### 이벤트가 유실되지 않는 이유
+
+상태 변경과 이벤트 발행이 **같은 트랜잭션**에서 일어난다(outbox 패턴). 별도 릴레이가
+`published_at IS NULL`인 행을 폴링해 발행한다. 전달 보장은 at-least-once이므로
+**구독자가 멱등해야 한다** — `Reservation`·`Order`·`Payment`의 전이 메서드가 전부
+"이미 그 상태면 `false`"를 돌려주는 것이 그 요구를 갚는다.
+
+구독자는 `@OnEvent(..., { suppressErrors: false })`로 등록한다. 기본값(`true`)이면
+Nest가 리스너 예외를 삼켜 릴레이가 전송 성공으로 판단하고, 실패한 이벤트가 영영
+사라진다 — 재시도·백오프·데드레터가 전부 죽은 코드가 된다.
+
+재현: `pnpm test:int apps/api/test/saga`
+
 ## 재고 락 전략 벤치마크
 
 같은 도메인 코드와 **같은 테스트**를 두 어댑터에 돌린 결과다. 포트 하나(`StockRepository`)
@@ -84,8 +133,9 @@ apps/web/       Next — FSD (shared → entities → features → widgets → v
 packages/contracts/   Zod 계약. DTO만 담으며 도메인 타입은 넣지 않는다
 ```
 
-구현된 바운디드 컨텍스트는 `identity`, `customer`, `catalog`, `inventory` 넷이다.
-`payment`와 `ordering`, 그리고 둘을 잇는 주문 사가는 다음 계획의 몫이다.
+여섯 바운디드 컨텍스트가 전부 구현돼 있다 — `identity`, `customer`, `catalog`,
+`inventory`, `payment`, `ordering`. 남은 것은 프론트엔드 상점 화면(FSD `entities` 이상)과
+Playwright 브라우저 E2E다.
 
 의존성 규칙은 `.dependency-cruiser.js`에 있고 `pnpm arch:check`가 강제한다.
 

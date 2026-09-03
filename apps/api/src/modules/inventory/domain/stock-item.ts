@@ -78,6 +78,21 @@ export class StockItem {
     this.onHandValue = this.onHandValue.plus(quantity);
   }
 
+  /**
+   * 확정으로 차감된 재고를 되돌린다. PAID 주문이 취소·환불될 때 부른다(스펙 §5.4).
+   *
+   * `release`와 다르다: `release`는 아직 차감되지 않은 `reserved`를 줄이고,
+   * `restore`는 이미 차감된 `onHand`를 늘린다. `reserved`는 확정 시점에 이미
+   * 0으로 내려갔으므로 건드리지 않는다.
+   *
+   * `restock`과도 다르다: `restock`은 입고라는 별개의 사건이고 예약과 링크가 없다.
+   * 같은 취소 이벤트가 두 번 배달되면(at-least-once) `restock`은 재고를 두 번 늘리지만,
+   * `restore`는 `Reservation`의 전이가 두 번째를 막는다.
+   */
+  restore(quantity: Quantity): void {
+    this.onHandValue = this.onHandValue.plus(quantity);
+  }
+
   private assertReservedCovers(quantity: Quantity): void {
     if (quantity.isGreaterThan(this.reservedValue)) {
       throw new StockCounterMismatchError(this.skuId, this.reservedValue.value, quantity.value);

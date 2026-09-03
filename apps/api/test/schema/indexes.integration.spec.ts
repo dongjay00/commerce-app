@@ -152,3 +152,44 @@ describe('예약 만료 스캔 인덱스', () => {
     expect(planText).toContain('reservations_expires_at_idx');
   });
 });
+
+describe('주문 목록 인덱스', () => {
+  it('orders_customer_placed_at_idx가 존재한다', async () => {
+    const db = await testDb();
+    const rows = await db.$queryRawUnsafe<Array<{ indexname: string }>>(
+      `SELECT indexname FROM pg_indexes WHERE tablename = 'orders'`,
+    );
+    expect(rows.map((r) => r.indexname)).toContain('orders_customer_placed_at_idx');
+  });
+
+  it('내 주문 목록 조회가 그 인덱스를 쓴다', async () => {
+    // 인덱스가 "존재한다"는 것과 "쿼리가 쓴다"는 것은 다르다. 정렬 방향이
+    // 어긋나면 인덱스는 그대로 있는데 플래너가 Seq Scan + Sort로 간다.
+    const db = await testDb();
+    const customerId = '018f2b1c-4a5d-7e6f-8a9b-0c1d0a000001';
+    await db.$executeRawUnsafe(`
+      INSERT INTO orders (id, customer_id, status, total_amount, total_currency,
+        ship_recipient, ship_phone, ship_zip, ship_line1, ship_line2, placed_at, updated_at)
+      SELECT gen_random_uuid(),
+             CASE WHEN n % 50 = 0 THEN '${customerId}'::uuid ELSE gen_random_uuid() END,
+             'PENDING_PAYMENT', 1000, 'KRW', '수령인', '010-0000-0000', '12345', '서울', NULL,
+             now() - (n || ' minutes')::interval, now()
+        FROM generate_series(1, 5000) AS n
+    `);
+    await db.$executeRawUnsafe('ANALYZE orders');
+
+    const plan = await db.$queryRawUnsafe<Array<{ 'QUERY PLAN': string }>>(`
+      EXPLAIN SELECT id FROM orders
+        WHERE customer_id = '${customerId}'
+        ORDER BY placed_at DESC
+        LIMIT 20
+    `);
+    const planText = plan.map((row) => row['QUERY PLAN']).join('\n');
+
+    expect(planText).toContain('orders_customer_placed_at_idx');
+    // 인덱스 이름만 단언하면 정렬 회귀를 놓친다. `@@index([customerId])`로 방향을
+    // 빼도 Postgres는 필터에 그 인덱스를 쓰므로 이름이 그대로 나오고, 대신
+    // `Sort` 노드가 추가된다(실측으로 확인). 정렬이 인덱스에 박혀 있으면 그 노드가 없다.
+    expect(planText).not.toContain('Sort');
+  });
+});
