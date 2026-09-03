@@ -4060,3 +4060,75 @@ git commit -m "docs: 락 전략 벤치마크 표와 계획 3 완료 기준 점�
 - **`inventory` 이벤트 구독 어댑터** — `OrderPaid`/`OrderPaymentFailed`/`OrderCancelled`를 구독해 `ConfirmReservation`/`ReleaseReservation`을 부른다. 유스케이스는 이 계획에 있고 구독 배선만 남았다.
 - **`relayOnce()`에 `FOR UPDATE SKIP LOCKED`가 없다** — 인스턴스가 둘이면 같은 이벤트를 두 번 보낸다. 문서화된 at-least-once 계약상 허용이지만, 그래서 **사가의 보상 핸들러가 진짜로 멱등해야 한다는 것이 선택이 아니라 요구사항**이 된다. `Reservation`의 전이 메서드가 `boolean`을 돌려주는 설계가 그 요구를 미리 갚아둔 것이다.
 - **역할 기반 인가** — catalog와 inventory의 쓰기 엔드포인트가 인증만 걸려 있다(편차 3). `Principal`에 역할이 없어서다. 관리자 화면이 필요해지는 시점에 Identity로 돌아가야 한다.
+
+---
+
+## 부록 — 완료 기준 점검 결과 (2026-09-03)
+
+`pnpm verify` exit 0 · 108 파일 · 884 통과 / 6 스킵 · 의존성 위반 0.
+
+### 기능
+
+| 기준 | 결과 | 증거 |
+|---|---|---|
+| 상품 등록 → 가격 변경 → 조회·검색이 실제 Postgres에서 동작 | ✅ | `catalog/adapters/in/http/product.controller.integration.spec.ts` |
+| 재고 등록 → 예약 → 확정/해제, 카운터와 예약 행 일치 | ✅ | `inventory/adapters/out/persistence/reservation-lifecycle.integration.spec.ts` (태스크 16에서 추가) |
+| 예약 TTL 만료 시 재고 자동 회복 | ✅ | `reservation-expiry.integration.spec.ts` — 만료 후 `reserved`가 0으로 복귀 |
+| 만료가 outbox에 남고 릴레이가 발행 | ✅ | 같은 파일. `published_at` 채워짐 + transport 도착까지 확인 |
+
+**점검 중 발견해 태스크 16에서 메운 구멍**: 확정/해제가 in-memory 리포지토리로만
+테스트되고 있었다. 카운터 갱신과 예약 행 갱신이 **한 트랜잭션 안에서** 커밋되는지는
+진짜 DB에서만 보이므로 — 편차 4가 감수한 비정규화의 대가가 청구되는 자리다 —
+`reservation-lifecycle.integration.spec.ts`를 추가했다. 확정 2회 멱등성도 함께 덮는다.
+
+### 아키텍처
+
+| 기준 | 결과 |
+|---|---|
+| `pnpm arch:check` 통과, 순환 없음 | ✅ 346 모듈 / 1456 의존성, 위반 0 |
+| `modules/*/domain/**`에 `@nestjs`·`@prisma/client`·contracts import 0건 | ✅ grep 0건 |
+| `inventory.module.ts` 한 줄로 락 전략 교체 가능 | ✅ 태스크 14 프루브 (a): 낙관적으로 바꿔도 857개 중 856개 통과 |
+| catalog·inventory가 다른 모듈을 import하지 않음 | ✅ grep 0건 |
+
+### 테스트
+
+| 기준 | 결과 |
+|---|---|
+| 재고 1개 / 동시 50건 → 정확히 1건 성공이 **두 전략 모두**에서 통과 | ✅ 3회 연속 실행에서 동일 |
+| 같은 계약 스위트가 in-memory와 Prisma 양쪽에서 통과 | ✅ `StockRepository` 3구현, `ReservationRepository` 2구현 |
+| 태스크 13의 세 뮤테이션이 전부 초과 판매를 일으켰고 건수가 기록됨 | ⚠️ 부분 — 아래 참조 |
+| `modules/*/domain/**` 95/90, `application/**` 90/85 | ✅ vitest 임계값 통과 (도메인은 4개 컨텍스트 모두 100%) |
+
+**⚠️ 뮤테이션 (a)의 판별력**: 비관적 어댑터에서 `FOR UPDATE`를 지웠을 때
+**재고1/시도50 시나리오는 초과 판매를 내지 않았다**(여전히 1건만 성공). 첫 트랜잭션이
+커밋한 뒤에야 나머지가 읽기 때문이다. 판별한 것은 재고10/시도30 시나리오뿐이며
+거기서 20건이 초과 판매됐다. **단일 재고 시나리오는 비관적 어댑터에 대해 판별력이
+없다** — 스펙 §13이 성공 기준으로 지목한 시나리오이므로 기록해 둔다.
+
+### 문서
+
+- 락 전략 벤치마크 표를 README에 실었다 (초과 판매·처리량·재시도 + 뮤테이션 결과표).
+- **아키텍처 그래프는 싣지 않았다.** 이 환경에 graphviz(`dot`)가 없다. `pnpm arch:graph`가
+  0바이트 `docs/architecture.svg`를 남기므로 `.gitignore`에 추가했다. 없는 파일을
+  참조하는 README보다 생성 방법만 적는 편이 낫다.
+
+---
+
+## 부록 — 계획 4로 넘기는 이월 (태스크 16 시점)
+
+계획 문서 본문 "계획 4로 넘어가는 것"에 더해, 이 계획을 실행하며 새로 생긴 것:
+
+- **`Quantity`에 "0 이상 + `DomainError`" 팩토리가 없다.** `Quantity.of`는 이름과 달리
+  인바운드 팩토리가 아니라 음수에 평문 `Error`(500)를 던지고, `positive`는 0을 거부한다.
+  재고 등록은 0을 허용해야 하므로 `of`를 쓸 수밖에 없고, 인바운드 그물이 계약(400)과
+  커널(500) 둘로 갈라져 있다. HTTP 경로는 계약이 앞에 있어 안전하지만, 계약을 거치지
+  않는 호출자(계획 4의 사가 등)가 생기면 그때 커널에 팩토리를 하나 더해야 한다.
+- **`OutboxRelayScheduler`의 겹침 방지 테스트가 타임아웃으로만 실패한다.** 가드를
+  제거하면 두 번째 호출도 게이트에 매달려 5초 타임아웃이 난다 — 판별은 되지만 단언
+  실패보다 신호가 약하다.
+- **통합 스위트는 스케줄러가 켜져 있어도 깨지지 않는다.** 주기가 5초/30초라 각 spec의
+  앱 수명 안에서 틱이 거의 뜨지 않기 때문이다. 즉 `SCHEDULERS_ENABLED=false`는
+  안전장치일 뿐 회귀를 잡는 장치가 아니다. 배선이 실제로 등록되는지는 두 서브클래스의
+  단위 spec(`registry.doesExist(...)`)이 대신 고정한다.
+- **`relayOnce()`가 여전히 단일 인스턴스 전제다** — `FOR UPDATE SKIP LOCKED`가 없다.
+  이제 프로덕션 호출자가 생겼으므로 이 전제가 실제로 의미를 갖기 시작했다.
