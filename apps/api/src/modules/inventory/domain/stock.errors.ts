@@ -74,3 +74,16 @@ export class StockNotFoundError extends DomainError {
     super(`재고를 찾을 수 없습니다: ${skuId}`);
   }
 }
+
+/**
+ * 그런 예약이 없다. 이벤트 핸들러가 없는 예약 ID를 받는 것은 정상 경로에서
+ * 일어나지 않으므로, 이것이 나면 데이터가 어긋났거나 잘못된 요청이다.
+ */
+export class ReservationNotFoundError extends DomainError {
+  static readonly CODE = 'RESERVATION_NOT_FOUND';
+  readonly code = ReservationNotFoundError.CODE;
+
+  constructor(reservationId: string) {
+    super(`예약을 찾을 수 없습니다: ${reservationId}`);
+  }
+}
