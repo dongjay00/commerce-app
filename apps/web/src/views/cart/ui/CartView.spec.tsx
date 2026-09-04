@@ -1,6 +1,10 @@
+import { ErrorCode } from '@commerce/contracts';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { HttpResponse, http } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
 import { ADDRESS_ID, aCartDto, anAddressDto, ORDER_ID, SKU_ID_2 } from '@/shared/api/msw/fixtures';
+import { server } from '@/shared/api/msw/server';
+import { MESSAGES } from '@/shared/lib/api-error';
 import { CartView } from './CartView';
 
 describe('CartView', () => {
@@ -111,6 +115,68 @@ describe('CartView', () => {
     fireEvent.click(screen.getByRole('button', { name: '빼기' }));
 
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+  });
+
+  /**
+   * 서버는 주문 시도의 첫 트랜잭션에서 장바구니를 비운 뒤 재고를 예약한다.
+   * 그래서 재고 부족으로 실패하면 서버 장바구니는 이미 비어 있는데, 실패 경로가
+   * 화면을 다시 읽지 않으면 사용자는 사라진 라인과 옛 총액을 계속 본다
+   * (최종 리뷰 I2). `onChanged`가 그 새로고침이다.
+   */
+  it('주문이 실패하면 onChanged로 화면을 다시 읽는다', async () => {
+    server.use(
+      http.post('/api/orders', () =>
+        HttpResponse.json({ code: ErrorCode.INSUFFICIENT_STOCK, message: 'x' }, { status: 409 }),
+      ),
+    );
+    const onChanged = vi.fn();
+    render(
+      <CartView
+        cart={aCartDto()}
+        addresses={[anAddressDto()]}
+        onPlaced={vi.fn()}
+        onChanged={onChanged}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '주문하기' }));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+  });
+
+  it('주문이 실패해 장바구니가 비어도 그 이유는 계속 보인다', async () => {
+    // `rerender`가 `router.refresh()`의 결과를 흉내낸다 — 같은 컴포넌트에 빈
+    // 장바구니가 새로 내려온다. 이유를 버튼 안에만 두면 여기서 사라진다.
+    server.use(
+      http.post('/api/orders', () =>
+        HttpResponse.json({ code: ErrorCode.INSUFFICIENT_STOCK, message: 'x' }, { status: 409 }),
+      ),
+    );
+    const { rerender } = render(
+      <CartView
+        cart={aCartDto()}
+        addresses={[anAddressDto()]}
+        onPlaced={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '주문하기' }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(MESSAGES[ErrorCode.INSUFFICIENT_STOCK]),
+    );
+
+    rerender(
+      <CartView
+        cart={aCartDto({ lines: [], total: { amount: '0', currency: 'KRW' } })}
+        addresses={[anAddressDto()]}
+        onPlaced={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('장바구니가 비어 있습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(MESSAGES[ErrorCode.INSUFFICIENT_STOCK]);
   });
 
   it('배송지가 없으면 주문 버튼이 disabled다', () => {

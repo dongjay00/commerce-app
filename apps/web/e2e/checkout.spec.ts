@@ -113,6 +113,11 @@ test.describe
       await expect(appAlert(page)).toHaveText('재고가 부족합니다.');
       await expect(page).toHaveURL(/\/cart$/);
 
+      // **화면이 서버 상태를 따라간다.** 서버는 첫 트랜잭션에서 장바구니를 비운 뒤
+      // 재고를 예약하므로, 이 실패 시점에 장바구니는 이미 비어 있다. 실패 경로가
+      // 화면을 다시 읽지 않으면 사라진 라인과 옛 총액이 계속 보인다(최종 리뷰 I2).
+      await expect(page.getByText('장바구니가 비어 있습니다.')).toBeVisible();
+
       // 예약이 잡혔다가 풀렸으므로 재고는 그대로다.
       expect(await api.stockOf(token, skuId)).toMatchObject({ onHand: 1, reserved: 0 });
       expect(crashes).toEqual([]);
