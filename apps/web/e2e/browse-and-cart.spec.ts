@@ -1,19 +1,4 @@
-import { expect, signIn, test } from './fixtures';
-
-/**
- * 담기 버튼은 눌러도 화면이 눈에 띄게 바뀌지 않는다 — `onAdded`가 `router.refresh()`를
- * 부를 뿐이라 확인 문구가 없다. 그래서 클릭 직후 `page.goto`로 넘어가면 POST가
- * 끝나기 전에 이동해 장바구니가 비어 보인다(실제로 이 경합이 두 테스트를 간헐적으로
- * 실패시켰다). BFF 응답을 기다려 그 경합을 없앤다.
- */
-async function addToCart(page: import('@playwright/test').Page): Promise<void> {
-  const added = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/cart/items') && response.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: '장바구니에 담기' }).click();
-  await added;
-}
+import { addToCart, expect, signIn, test } from './fixtures';
 
 test('상품 목록에서 상세로 들어간다', async ({ page, api }) => {
   const { token } = await api.signUp();
