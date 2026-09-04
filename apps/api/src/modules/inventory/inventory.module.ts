@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-// biome-ignore lint/style/useImportType: Nest DI가 design:paramtypes 런타임 값을 요구한다.
 import { SchedulerRegistry } from '@nestjs/schedule';
 // biome-ignore lint/style/useImportType: Nest DI가 design:paramtypes 런타임 값을 요구한다 — type-only면 모듈 생성자 주입이 깨진다.
 import { DomainErrorRegistry } from '../../shared/infrastructure/http/domain-error.registry';
