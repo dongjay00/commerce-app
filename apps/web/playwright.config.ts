@@ -3,6 +3,9 @@ import { defineConfig, devices } from '@playwright/test';
 const WEB_PORT = 3100;
 const API_PORT = 3101;
 
+/** `e2e/session.spec.ts`가 이 값을 읽어 만료를 기다린다. */
+export const ACCESS_TOKEN_TTL_SECONDS = 15;
+
 /**
  * 두 서버를 Playwright가 띄운다. 포트를 개발용(3000/3001)과 다르게 두는 이유:
  * 개발 서버를 켜둔 채로 E2E를 돌릴 수 있어야 한다.
@@ -34,6 +37,14 @@ export default defineConfig({
       env: {
         PORT: String(API_PORT),
         ENABLE_TEST_ENDPOINTS: 'true',
+        // `e2e/session.spec.ts`가 만료를 실제로 기다린다(15분이 아니라 15초).
+        // **더 짧게 두면 안 된다.** C1의 결정대로 RSC 렌더가 만료를 만나면 화면이
+        // 로그인으로 보내지므로, 이 값이 다른 시나리오의 "쿠키를 쓴 마지막 요청 →
+        // 다음 RSC 조회" 간격보다 짧아지는 순간 무관한 테스트가 로그인 화면으로
+        // 튕겨 빨개진다. 리뷰가 제안한 2초로 실제로 돌려 보면 browse-and-cart
+        // 세 시나리오가 각각 1.7~2.7초에 끝난다 — 시나리오 하나의 전체 길이가
+        // TTL과 같은 크기라 여유가 없다. 자세한 것은 계획서 부록에 적었다.
+        ACCESS_TOKEN_TTL_SECONDS: String(ACCESS_TOKEN_TTL_SECONDS),
         // 스케줄러를 켠다 — TTL 자가치유가 도는 환경이어야 사가가 진짜다.
         // 다만 어떤 시나리오도 15분을 기다리지 않는다.
         SCHEDULERS_ENABLED: 'true',
