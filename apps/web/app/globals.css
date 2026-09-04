@@ -1,0 +1,54 @@
+:root {
+  color-scheme: light dark;
+  --gap: 1rem;
+  --border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+
+body {
+  margin: 0 auto;
+  max-width: 60rem;
+  padding: var(--gap);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  line-height: 1.6;
+}
+
+header nav {
+  display: flex;
+  gap: var(--gap);
+  align-items: baseline;
+  padding-block: var(--gap);
+  border-bottom: var(--border);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: var(--border);
+}
+
+button {
+  padding: 0.4rem 0.8rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+[role='alert'] {
+  padding: 0.5rem;
+  border: var(--border);
+}
+
+ul[role='list'] {
+  padding: 0;
+  list-style: none;
+}

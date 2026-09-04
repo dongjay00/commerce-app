@@ -1,4 +1,4 @@
-import { signInBodySchema, signUpBodySchema } from '@commerce/contracts';
+import { refreshBodySchema, signInBodySchema, signUpBodySchema } from '@commerce/contracts';
 import { HttpResponse, http } from 'msw';
 
 const BASE = process.env['API_BASE_URL'] ?? 'http://localhost:3001';
@@ -21,5 +21,9 @@ export const authHandlers = [
       { accessToken: 'msw-access', refreshToken: 'msw-refresh', expiresInSeconds: 900 },
       { status: 200 },
     );
+  }),
+  http.post(`${BASE}/auth/sign-out`, async ({ request }) => {
+    refreshBodySchema.parse(await request.json());
+    return new HttpResponse(null, { status: 204 });
   }),
 ];

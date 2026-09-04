@@ -14,6 +14,7 @@ import {
 } from '../../shared/kernel/ports/transaction-manager';
 import { PaymentEventSubscriber } from './adapters/in/events/payment-event.subscriber';
 import { registerPaymentDomainErrors } from './adapters/in/http/payment-domain-error-mappings';
+import { PgScenarioController } from './adapters/in/http/pg-scenario.controller';
 import { PgWebhookController } from './adapters/in/http/pg-webhook.controller';
 import { PrismaPaymentRepository } from './adapters/out/persistence/prisma-payment.repository';
 import { FakePgAdapter } from './adapters/out/pg/fake-pg.adapter';
@@ -33,8 +34,19 @@ import {
 import { PG_CLIENT, type PgClient } from './application/ports/out/pg-client';
 import { PaymentService } from './application/services/payment.service';
 
+/**
+ * 테스트 전용 컨트롤러는 플래그가 켜졌을 때만 존재한다. 배열 스프레드로 조건부
+ * 등록하는 이유: `@Controller` 데코레이터만으로는 등록을 막을 수 없고, 모듈의
+ * `controllers` 배열이 유일한 스위치다.
+ *
+ * **import 시점에 한 번 평가된다.** 그래서 플래그를 켠 채로 보려면 이 모듈을 다시
+ * 평가해야 하고, 두 상태를 각각 다른 spec 파일에서 확인한다.
+ */
+const testControllers =
+  process.env['ENABLE_TEST_ENDPOINTS'] === 'true' ? [PgScenarioController] : [];
+
 @Module({
-  controllers: [PgWebhookController],
+  controllers: [PgWebhookController, ...testControllers],
   providers: [
     PaymentEventSubscriber,
     { provide: PG_CLIENT, useClass: FakePgAdapter },

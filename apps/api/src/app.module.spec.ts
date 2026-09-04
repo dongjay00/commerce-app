@@ -41,6 +41,7 @@ import {
   OutOfStockError,
 } from './modules/ordering/domain/order/order.errors';
 import { PaymentEventSubscriber } from './modules/payment/adapters/in/events/payment-event.subscriber';
+import { PgScenarioController } from './modules/payment/adapters/in/http/pg-scenario.controller';
 import { PgWebhookController } from './modules/payment/adapters/in/http/pg-webhook.controller';
 import { FakePgAdapter } from './modules/payment/adapters/out/pg/fake-pg.adapter';
 import { PG_CLIENT } from './modules/payment/application/ports/out/pg-client';
@@ -200,6 +201,14 @@ describe('AppModule DI 그래프', () => {
 
   it('PgWebhookController가 해석된다', () => {
     expect(moduleRef.get(PgWebhookController)).toBeInstanceOf(PgWebhookController);
+  });
+
+  it('기본 환경에서는 PgScenarioController가 존재하지 않는다', () => {
+    // ENABLE_TEST_ENDPOINTS가 없으면 payment.module.ts의 조건부 controllers 배열이
+    // 이 컨트롤러를 빼므로 DI 그래프에 아예 없다. 등록되어 있으면 인증 없이 결제
+    // 시나리오를 바꾸는 라우트가 기본으로 열린다.
+    expect(process.env['ENABLE_TEST_ENDPOINTS']).toBeUndefined();
+    expect(() => moduleRef.get(PgScenarioController)).toThrow();
   });
 
   it('PG_CLIENT와 FakePgAdapter가 같은 인스턴스다', () => {

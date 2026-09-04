@@ -9,6 +9,7 @@ Next.js + Nest.js + TypeScript로 커머스 주문 파이프라인을 구현한�
 ```bash
 pnpm install
 cp .env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local   # SESSION_PASSWORD는 32자 이상이어야 한다
 pnpm db:up          # Postgres 17 (Docker)
 pnpm db:migrate
 pnpm verify         # lint + 아키텍처 검증 + 타입 체크 + 테스트
@@ -30,6 +31,7 @@ pnpm --filter @commerce/web dev    # http://localhost:3000
 | `pnpm test:int` | 실제 Postgres를 쓰는 통합 테스트 |
 | `pnpm arch:check` | 아키텍처 경계 규칙 검증 |
 | `pnpm arch:graph` | 의존성 그래프 SVG 생성. graphviz(`dot`)가 설치된 환경에서만 동작하며, 생성물은 커밋하지 않는다 |
+| `pnpm test:e2e` | Playwright 브라우저 E2E. `pnpm db:up`이 먼저 필요하고 `pnpm verify`에는 들어 있지 않다 |
 
 ## 주문 사가
 
@@ -79,6 +81,75 @@ Nest가 리스너 예외를 삼켜 릴레이가 전송 성공으로 판단하고
 사라진다 — 재시도·백오프·데드레터가 전부 죽은 코드가 된다.
 
 재현: `pnpm test:int apps/api/test/saga`
+
+## 프론트엔드
+
+프론트에는 헥사고날을 적용하지 않고 Feature-Sliced Design을 쓴다. 프론트의 "도메인"은
+서버 도메인의 그림자이고 보안상 신뢰할 수 없는 사본이라, 진짜 불변식은 서버에 있다.
+
+레이어는 **아래로만** 의존한다.
+
+```
+views ← widgets ← features ← entities ← shared
+```
+
+`app/`(Next 라우팅)과 `src/server/`(BFF)는 레이어 밖이다. 백엔드와 **같은
+dependency-cruiser 설정 파일**이 이 방향을 강제한다.
+
+### `app/`이 페치하고 `views`는 그리기만 한다
+
+`no-server-code-in-fsd` 규칙이 FSD 레이어에서 `src/server/`를 import하는 것을 막는다.
+그래서 데이터 페치는 `app/`의 RSC가 하고 `views`는 props를 받는 순수 컴포넌트가 된다.
+
+```
+app/products/[id]/page.tsx   RSC. api-client로 페치하고 props로 넘긴다
+  └─ views/product-detail    순수 컴포넌트 — Testing Library로 테스트된다
+```
+
+결과적으로 E2E가 덮어야 하는 것은 `app/`의 페치 3줄뿐이다.
+
+### 조회와 변경의 경로가 다르다
+
+| 작업 | 경로 |
+|---|---|
+| 조회 | RSC → `src/server/api-client` 직접 (이미 서버다) |
+| 변경 | 클라이언트 → Route Handler(`app/api/*`) → Nest |
+| 인증 | Route Handler (`Set-Cookie`가 필요하다) |
+
+브라우저는 액세스 토큰을 보지 않는다. 토큰 주입과 401 시 refresh 재시도가 BFF
+한 곳(`src/server/api-client.ts`)에 모인다.
+
+### 테스트
+
+프론트의 seam은 포트가 아니라 **네트워크**다. MSW가 그 자리이고 핸들러는
+`@commerce/contracts`의 Zod 스키마로 요청과 응답을 검증한다 — 백엔드 계약이 바뀌면
+프론트 목이 즉시 깨진다.
+
+| 레이어 | 테스트 | TDD |
+|---|---|---|
+| `shared/lib`, `entities/*/model` | Vitest 단위 | 적용 |
+| `features/*/model` (훅) | Vitest + `renderHook` + MSW | 적용 |
+| `features/*/ui`, `widgets`, `views` | Testing Library + MSW | test-after |
+| `app/` (RSC) | Playwright | 미적용 |
+
+프론트에는 커버리지 임계값을 걸지 않는다. 스펙 §9.11이 "경로별로 건다"고 했고,
+프론트에는 지킬 불변식이 없다 — UI 커버리지 목표는 렌더링을 확인하는 무의미한
+테스트를 양산한다.
+
+## E2E
+
+```bash
+pnpm db:up
+pnpm test:e2e
+```
+
+Playwright가 두 서버를 별도 포트(3100/3101)로 띄우므로 개발 서버를 켜둔 채 돌릴 수
+있다. **`pnpm verify`에는 들어 있지 않다** — 두 서버와 브라우저를 띄우는 비용을
+커밋마다 치르지 않기 위해서다. CI가 붙으면 별도 잡으로 넣는다.
+
+스펙이 정한 일곱 영역을 덮는다: 회원가입/로그인, 상품 조회, 장바구니, 주문 성공,
+결제 거절 보상, 주문 취소 환불, 재고 부족. 테스트는 10개이고 셋은 같은 화면의
+부정 경로다(잘못된 비밀번호, 미인증 리다이렉트, 장바구니에서 빼기).
 
 ## 재고 락 전략 벤치마크
 
@@ -134,8 +205,9 @@ packages/contracts/   Zod 계약. DTO만 담으며 도메인 타입은 넣지 �
 ```
 
 여섯 바운디드 컨텍스트가 전부 구현돼 있다 — `identity`, `customer`, `catalog`,
-`inventory`, `payment`, `ordering`. 남은 것은 프론트엔드 상점 화면(FSD `entities` 이상)과
-Playwright 브라우저 E2E다.
+`inventory`, `payment`, `ordering`. 프론트엔드 상점 화면과 Playwright 브라우저 E2E도
+끝났다. 남은 것은 스펙 §1.3이 처음부터 범위 밖으로 둔 것들(반품, 부분 환불, 역할 기반
+인가, 소셜 로그인)과 각 계획 문서 끝의 이월 목록이다.
 
 의존성 규칙은 `.dependency-cruiser.js`에 있고 `pnpm arch:check`가 강제한다.
 
