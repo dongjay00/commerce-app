@@ -1,20 +1,20 @@
 import { addToCart, expect, signIn, test } from './fixtures';
 
-test('상품 목록에서 상세로 들어간다', async ({ page, api }) => {
+test('방금 등록한 상품이 목록에 보이고 그 상세로 들어간다', async ({ page, api }) => {
   const { token } = await api.signUp();
-  await api.registerCatalog(token, { onHand: 10 });
+  const { productId, name } = await api.registerCatalog(token, { onHand: 10 });
 
   await page.goto('/');
 
-  // 다른 테스트가 만든 상품도 목록에 있으므로 첫 카드가 아니라 링크의 존재를 본다.
-  const firstProduct = page.getByRole('link', { name: /^티셔츠-/ }).first();
-  await expect(firstProduct).toBeVisible();
-  const name = await firstProduct.innerText();
-  await firstProduct.click();
+  // **자기가 등록한 상품**을 찾는다. 이전에는 `/^티셔츠-/`로 아무 티셔츠나 골랐고,
+  // 그래서 시드를 통째로 지워도 이전 실행이 남긴 상품에 걸려 통과했다(최종 리뷰 I1).
+  // 이름으로 찾으면 카탈로그 등록이나 목록 쿼리가 깨질 때 정확히 빨개진다.
+  const registered = page.getByRole('link', { name });
+  await expect(registered).toBeVisible();
+  await registered.click();
 
-  // 이동을 먼저 기다린다. 목록 페이지의 카드 제목도 `/^티셔츠-/`에 걸리므로,
-  // URL을 확인하지 않으면 아직 목록에 있는 동안 여러 개가 잡혀 strict 모드가 깨진다.
-  await expect(page).toHaveURL(/\/products\/[0-9a-f-]+$/);
+  // 이동을 먼저 기다린다 — 아직 목록에 있는 동안 단언하면 카드 제목이 잡힌다.
+  await expect(page).toHaveURL(`/products/${productId}`);
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
   await expect(page.getByText('12,000원')).toBeVisible();
 });

@@ -20,12 +20,37 @@ function uniqueSuffix(): string {
   return `${Date.now().toString(36)}${processTag}${sequence.toString(36)}`;
 }
 
+/** 카운트다운의 기준점. 이 시각을 넘기기 전에 상점에 페이지네이션이 생길 것이다. */
+const NAME_EPOCH_MS = 2_000_000_000_000;
+
+/**
+ * 상품 이름을 **시각의 내림차순**으로 만든다 — 방금 만든 것이 사전순 맨 앞이다.
+ *
+ * 상점 목록(`app/page.tsx`)은 이름 오름차순으로 20개만 가져오고 페이지네이션이
+ * 없다(최종 리뷰 m8). E2E는 DB를 비우지 않으므로 이전 실행이 남긴 상품이 계속
+ * 쌓이고, 이름을 시각의 **오름차순**으로 두면 방금 등록한 상품은 목록 끝으로 밀려
+ * 첫 페이지에서 영영 보이지 않는다. 그러면 첫 시나리오가 자기가 만든 상품을
+ * 단언할 수 없다(최종 리뷰 I1).
+ *
+ * 자릿수를 고정하는 것이 핵심이다 — 폭이 변하면 사전순과 시간순이 어긋난다.
+ *
+ * **제대로 된 해법은 목록을 최신순으로 정렬하는 것이다**(리뷰가 제안한 둘 중 하나).
+ * 그건 상점의 동작을 바꾸는 일이라 이 수정 묶음의 범위 밖이고, 계획서 부록에 이월했다.
+ */
+function descendingNameTag(): string {
+  return (NAME_EPOCH_MS - Date.now()).toString(36).padStart(9, '0');
+}
+
 export interface SeedApi {
   signUp(): Promise<{ email: string; password: string; token: string }>;
+  /**
+   * 상품·SKU·재고를 만든다. **만든 이름을 돌려준다** — 시나리오가 "아무 티셔츠"가
+   * 아니라 자기가 등록한 상품을 단언할 수 있어야 한다(최종 리뷰 I1).
+   */
   registerCatalog(
     token: string,
     options: { onHand: number },
-  ): Promise<{ productId: string; skuId: string }>;
+  ): Promise<{ productId: string; skuId: string; name: string }>;
   /**
    * **전역 상태를 바꾼다.** `FakePgAdapter`는 API 프로세스 하나에 인스턴스 하나라,
    * 병렬로 도는 두 시나리오가 서로의 설정을 덮어쓴다. 결제 시나리오를 바꾸는
@@ -51,10 +76,14 @@ function makeSeedApi(request: APIRequestContext): SeedApi {
     },
 
     async registerCatalog(token, options) {
+      // 카운트다운이 순서를 정하고 `uniqueSuffix()`가 유일성을 맡는다 — 같은
+      // 밀리초에 두 개를 만들면 이름이 겹쳐 `getByRole('link', { name })`이
+      // 둘을 잡고 strict 모드가 깨진다.
+      const name = `티셔츠-${descendingNameTag()}-${uniqueSuffix()}`;
       const product = await request.post(`${API}/products`, {
         headers: auth(token),
         data: {
-          name: `티셔츠-${uniqueSuffix()}`,
+          name,
           skus: [{ code: 'RED-M', price: { amount: '12000', currency: 'KRW' } }],
         },
       });
@@ -68,7 +97,7 @@ function makeSeedApi(request: APIRequestContext): SeedApi {
       });
       expect(stock.status(), await stock.text()).toBe(201);
 
-      return { productId: body.id as string, skuId };
+      return { productId: body.id as string, skuId, name };
     },
 
     async setPgScenario(scenario) {
