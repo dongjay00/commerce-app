@@ -215,3 +215,4 @@ packages/contracts/   Zod 계약. DTO만 담으며 도메인 타입은 넣지 �
 
 - 설계 스펙: `docs/superpowers/specs/2026-09-01-commerce-ordering-design.md`
 - 구현 계획: `docs/superpowers/plans/`
+- 백로그(이월 항목 우선순위): `docs/backlog.md` — 계획 1~5의 이월을 한곳에 모은 단일 출처다
